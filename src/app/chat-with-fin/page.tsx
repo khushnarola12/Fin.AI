@@ -97,7 +97,7 @@ export default function ChatWithFinAI() {
     };
 
     const handleBack = () => {
-        router.push('/');
+        router.push('/dashboard');
     };
 
     // Show loading while auth state is being determined

@@ -197,7 +197,7 @@ export default function ChatWithFinAI() {
         } catch (e: any) {
             setError(e?.message ?? "Failed to end call");
         }
-    }, []);
+    }, [])
 
     const handleBack = useCallback(async () => {
         if (isInCall) {
@@ -207,7 +207,7 @@ export default function ChatWithFinAI() {
                 // ignore
             }
         }
-        router.push("/");
+        router.push("/dashboard");
     }, [endCall, isInCall, router]);
 
     // NOW SAFE TO HAVE CONDITIONAL RETURNS AFTER ALL HOOKS
