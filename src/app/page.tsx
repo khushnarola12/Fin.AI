@@ -64,36 +64,38 @@ export default function HomePage() {
           <div className="flex items-center space-x-2">
             <span className="text-xl font-bold text-gray-900">Fin.<span className="text-green-600">AI</span></span>
           </div>
-          <nav className="hidden md:flex items-center space-x-8">
-            <a href="#features" className="text-gray-600 hover:text-green-600 transition-colors">
-              Features
-            </a>
-            <a href="#pricing" className="text-gray-600 hover:text-green-600 transition-colors">
-              Pricing
-            </a>
-            <a href="#reviews" className="text-gray-600 hover:text-green-600 transition-colors">
-              Reviews
-            </a>
-            <a href="#faq" className="text-gray-600 hover:text-green-600 transition-colors">
-              FAQ
-            </a>
-          </nav>
-          <div className="flex items-center space-x-4">
-            {!isSignedIn && (
+          <div className="flex items-center space-x-8">
+            <nav className="hidden md:flex items-center space-x-8">
+              <a href="#features" className="text-gray-600 hover:text-green-600 transition-colors">
+                Features
+              </a>
+              <a href="#pricing" className="text-gray-600 hover:text-green-600 transition-colors">
+                Pricing
+              </a>
+              <a href="#reviews" className="text-gray-600 hover:text-green-600 transition-colors">
+                Reviews
+              </a>
+              <a href="#faq" className="text-gray-600 hover:text-green-600 transition-colors">
+                FAQ
+              </a>
+            </nav>
+            <div className="flex items-center space-x-4">
+              {!isSignedIn && (
+                <Button 
+                  variant="ghost" 
+                  className="text-gray-700 hover:text-green-600"
+                  onClick={handleSignIn}
+                >
+                  Sign In
+                </Button>
+              )}
               <Button 
-                variant="ghost" 
-                className="text-gray-700 hover:text-green-600"
-                onClick={handleSignIn}
+                className="bg-green-600 hover:bg-green-700 text-white"
+                onClick={handleStartTrial}
               >
-                Sign In'
+                {isSignedIn ? 'Go to Dashboard' : 'Start Free Trial'}
               </Button>
-            )}
-            <Button 
-              className="bg-green-600 hover:bg-green-700 text-white"
-              onClick={handleStartTrial}
-            >
-              {isSignedIn ? 'Go to Dashboard' : 'Start Free Trial'}
-            </Button>
+            </div>
           </div>
         </div>
       </header>
