@@ -177,7 +177,7 @@ export default function HomePage() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-            <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white group">
+            <Card className="border-0 transition-all duration-300 bg-white group">
               <CardContent className="p-8 text-center">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:bg-green-600 transition-colors">
                   <MessageCircle className="w-8 h-8 text-green-600 group-hover:text-white transition-colors" />
@@ -203,7 +203,7 @@ export default function HomePage() {
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white group">
+            <Card className="border-0 transition-all duration-300 bg-white group">
               <CardContent className="p-8 text-center">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:bg-green-600 transition-colors">
                   <Phone className="w-8 h-8 text-green-600 group-hover:text-white transition-colors" />
@@ -229,7 +229,7 @@ export default function HomePage() {
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white group">
+            <Card className="border-0 transition-all duration-300 bg-white group">
               <CardContent className="p-8 text-center">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:bg-green-600 transition-colors">
                   <BarChart3 className="w-8 h-8 text-green-600 group-hover:text-white transition-colors" />
@@ -501,7 +501,7 @@ export default function HomePage() {
                 savings: "$12,000 interest saved",
               },
             ].map((testimonial, index) => (
-              <Card key={index} className="border-0 shadow-lg bg-white hover:shadow-xl transition-shadow">
+              <Card key={index} className="border-0 bg-white hover:shadow-xl transition-shadow">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex">
