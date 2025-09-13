@@ -79,13 +79,15 @@ export default function HomePage() {
             </a>
           </nav>
           <div className="flex items-center space-x-4">
-            <Button 
-              variant="ghost" 
-              className="text-gray-700 hover:text-green-600"
-              onClick={handleSignIn}
-            >
-              {isSignedIn ? 'Dashboard' : 'Sign In'}
-            </Button>
+            {!isSignedIn && (
+              <Button 
+                variant="ghost" 
+                className="text-gray-700 hover:text-green-600"
+                onClick={handleSignIn}
+              >
+                Sign In'
+              </Button>
+            )}
             <Button 
               className="bg-green-600 hover:bg-green-700 text-white"
               onClick={handleStartTrial}

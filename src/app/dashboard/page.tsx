@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Spinner } from "@/components/spinner";
 import { UserButton, useUser } from "@clerk/nextjs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,63 +11,112 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, TrendingUp, DollarSign, CreditCard, Building, Trash2, PlusCircle, AlertCircle, Shield, BarChart3, Wallet } from "lucide-react";
+import { Plus, TrendingUp, DollarSign, CreditCard, Building, Trash2, PlusCircle, AlertCircle, Shield, BarChart3, Wallet, Loader2, Edit, MoreVertical, Sparkles, Star } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { FinancialAnalytics } from "@/components/FinancialAnalytics";
+import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
+import Link from "next/link";
+
+// Type definitions - Fixed to use string IDs for UUIDs
+interface Asset {
+  id: string;
+  name: string;
+  type: string;
+  value: number;
+  updatedAt: string;
+}
+
+interface DashboardLiability {
+  id: string;
+  name: string;
+  type: string;
+  amount: number;
+  interestRate?: number;
+  minimumPayment?: number;
+  dueDate: string;
+  updatedAt: string;
+}
+
+interface Investment {
+  id: string;
+  name: string;
+  type: string;
+  shares: number;
+  currentPrice: number;
+  totalValue: number;
+  gainLoss: number;
+  gainLossPercentage: number;
+  updatedAt: string;
+}
+
+interface PPFBalance {
+  totalBalance: number | null;
+  annualContribution: number | null;
+  maturityAmount: number | null;
+  interestRate: number | null;
+}
+
+interface NewAsset {
+  name: string;
+  type: string;
+  value: string;
+}
+
+interface NewLiability {
+  name: string;
+  type: string;
+  amount: string;
+  interestRate: string;
+  minimumPayment: string;
+  dueDate: string;
+}
+
+interface NewInvestment {
+  name: string;
+  type: string;
+  shares: string;
+  currentPrice: string;
+  purchasePrice: string;
+}
 
 export default function DashboardPage() {
-  const user = useUser();
-  
-  // State for financial data - all empty by default
+  const { user, isLoaded } = useUser();
+
+  // Loading states
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isSavingNetWorth, setIsSavingNetWorth] = useState(false);
+  const [isSavingIncome, setIsSavingIncome] = useState(false);
+  const [isSavingCredit, setIsSavingCredit] = useState(false);
+  const [isSavingAssets, setIsSavingAssets] = useState(false);
+  const [isSavingLiabilities, setIsSavingLiabilities] = useState(false);
+  const [isSavingPpf, setIsSavingPpf] = useState(false);
+  const [isSavingInvestments, setIsSavingInvestments] = useState(false);
+  const [isDeletingAsset, setIsDeletingAsset] = useState<string | null>(null);
+  const [isDeletingLiability, setIsDeletingLiability] = useState<string | null>(null);
+  const [isDeletingInvestment, setIsDeletingInvestment] = useState<string | null>(null);
+
+  // State for financial data
   const [netWorth, setNetWorth] = useState<number | null>(null);
   const [monthlyIncome, setMonthlyIncome] = useState<number | null>(null);
   const [creditScore, setCreditScore] = useState<number | null>(null);
-  
-  // State for assets - empty by default
-  const [assets, setAssets] = useState<Array<{
-    id: number;
-    name: string;
-    type: string;
-    value: number;
-    updatedAt: string;
-  }>>([]);
 
-  // State for liabilities - empty by default
-  const [liabilities, setLiabilities] = useState<Array<{
-    id: number;
-    name: string;
-    type: string;
-    amount: number;
-    interestRate?: number;
-    minimumPayment?: number;
-    dueDate: string;
-    updatedAt: string;
-  }>>([]);
+  // State for assets
+  const [assets, setAssets] = useState<Asset[]>([]);
 
-  // State for EPF Balance - changed to PPF (Public Provident Fund) for India
-  const [ppfBalance, setPpfBalance] = useState<{
-    totalBalance: number | null;
-    annualContribution: number | null;
-    maturityAmount: number | null;
-    interestRate: number | null;
-  }>({
+  // State for liabilities
+  const [liabilities, setLiabilities] = useState<DashboardLiability[]>([]);
+
+  // State for PPF Balance
+  const [ppfBalance, setPpfBalance] = useState<PPFBalance>({
     totalBalance: null,
     annualContribution: null,
     maturityAmount: null,
     interestRate: null
   });
 
-  // State for investments - empty by default
-  const [investments, setInvestments] = useState<Array<{
-    id: number;
-    name: string;
-    type: string;
-    shares: number;
-    currentPrice: number;
-    totalValue: number;
-    gainLoss: number;
-    gainLossPercentage: number;
-    updatedAt: string;
-  }>>([]);
+  // State for investments
+  const [investments, setInvestments] = useState<Investment[]>([]);
 
   // State for dialogs
   const [netWorthOpen, setNetWorthOpen] = useState(false);
@@ -77,23 +126,28 @@ export default function DashboardPage() {
   const [liabilitiesOpen, setLiabilitiesOpen] = useState(false);
   const [ppfOpen, setPpfOpen] = useState(false);
   const [investmentsOpen, setInvestmentsOpen] = useState(false);
-  
+
+  // Edit states
+  const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
+  const [editingLiability, setEditingLiability] = useState<DashboardLiability | null>(null);
+  const [editingInvestment, setEditingInvestment] = useState<Investment | null>(null);
+
   // State for input values
   const [newNetWorth, setNewNetWorth] = useState("");
   const [newIncome, setNewIncome] = useState("");
   const [newCredit, setNewCredit] = useState("");
-  
+
   // State for new assets form
-  const [newAssets, setNewAssets] = useState([{ name: "", type: "", value: "" }]);
+  const [newAssets, setNewAssets] = useState<NewAsset[]>([{ name: "", type: "", value: "" }]);
 
   // State for new liabilities form
-  const [newLiabilities, setNewLiabilities] = useState([{ 
-    name: "", 
-    type: "", 
-    amount: "", 
-    interestRate: "", 
-    minimumPayment: "", 
-    dueDate: "" 
+  const [newLiabilities, setNewLiabilities] = useState<NewLiability[]>([{
+    name: "",
+    type: "",
+    amount: "",
+    interestRate: "",
+    minimumPayment: "",
+    dueDate: ""
   }]);
 
   // State for PPF form
@@ -105,7 +159,7 @@ export default function DashboardPage() {
   });
 
   // State for new investments form
-  const [newInvestments, setNewInvestments] = useState([{
+  const [newInvestments, setNewInvestments] = useState<NewInvestment[]>([{
     name: "",
     type: "",
     shares: "",
@@ -113,36 +167,227 @@ export default function DashboardPage() {
     purchasePrice: ""
   }]);
 
-  if (!user.isLoaded || !user.user) {
-    return <div className="h-screen w-full flex justify-center items-center"> <Spinner /> </div>;
-  }
+  // Load data from Supabase on component mount
+  useEffect(() => {
+    if (isLoaded && user?.emailAddresses?.[0]?.emailAddress) {
+      loadUserData();
+    }
+  }, [isLoaded, user]);
 
-  const handleNetWorthUpdate = () => {
-    if (newNetWorth && !isNaN(Number(newNetWorth))) {
+  const loadUserData = async () => {
+    if (!user?.emailAddresses?.[0]?.emailAddress) return;
+
+    const userEmail = user.emailAddresses[0].emailAddress;
+    setIsInitialLoading(true);
+
+    try {
+      // Create user if doesn't exist
+      const { error: userError } = await supabase
+        .from('users')
+        .upsert({ email: userEmail }, { onConflict: 'email' });
+
+      if (userError) throw userError;
+
+      // Load user basic info
+      const { data: userData } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', userEmail)
+        .single();
+
+      if (userData) {
+        setNetWorth(userData.net_worth || null);
+        setMonthlyIncome(userData.monthly_income || null);
+        setCreditScore(userData.credit_score || null);
+      }
+
+      // Load assets - Keep as string IDs
+      const { data: assetsData } = await supabase
+        .from('assets')
+        .select('*')
+        .eq('user_email', userEmail);
+
+      if (assetsData) {
+        setAssets(assetsData.map(asset => ({
+          id: asset.id, // Keep as string UUID
+          name: asset.name,
+          type: asset.type,
+          value: asset.value,
+          updatedAt: new Date(asset.updated_at).toLocaleDateString()
+        })));
+      }
+
+      // Load liabilities - Keep as string IDs
+      const { data: liabilitiesData } = await supabase
+        .from('liabilities')
+        .select('*')
+        .eq('user_email', userEmail);
+
+      if (liabilitiesData) {
+        setLiabilities(liabilitiesData.map(liability => ({
+          id: liability.id, // Keep as string UUID
+          name: liability.name,
+          type: liability.type,
+          amount: liability.amount,
+          interestRate: liability.interest_rate,
+          minimumPayment: liability.minimum_payment,
+          dueDate: liability.due_date || "Not specified",
+          updatedAt: new Date(liability.updated_at).toLocaleDateString()
+        })));
+      }
+
+      // Load PPF balance
+      const { data: ppfData } = await supabase
+        .from('ppf_balance')
+        .select('*')
+        .eq('user_email', userEmail)
+        .single();
+
+      if (ppfData) {
+        setPpfBalance({
+          totalBalance: ppfData.total_balance,
+          annualContribution: ppfData.annual_contribution,
+          maturityAmount: ppfData.maturity_amount,
+          interestRate: ppfData.interest_rate
+        });
+      }
+
+      // Load investments - Keep as string IDs
+      const { data: investmentsData } = await supabase
+        .from('investments')
+        .select('*')
+        .eq('user_email', userEmail);
+
+      if (investmentsData) {
+        setInvestments(investmentsData.map(investment => ({
+          id: investment.id, // Keep as string UUID
+          name: investment.name,
+          type: investment.type,
+          shares: investment.shares,
+          currentPrice: investment.current_price,
+          totalValue: investment.total_value,
+          gainLoss: investment.gain_loss,
+          gainLossPercentage: investment.gain_loss_percentage,
+          updatedAt: new Date(investment.updated_at).toLocaleDateString()
+        })));
+      }
+
+    } catch (error) {
+      console.error('Error loading user data:', error);
+      toast.error("Failed to load your financial data. Please try again.");
+    } finally {
+      setIsInitialLoading(false);
+    }
+  };
+
+  // Basic update handlers (unchanged)
+  const handleNetWorthUpdate = async () => {
+    if (!newNetWorth || isNaN(Number(newNetWorth)) || !user?.emailAddresses?.[0]?.emailAddress) return;
+
+    setIsSavingNetWorth(true);
+    const userEmail = user.emailAddresses[0].emailAddress;
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({
+          net_worth: Number(newNetWorth),
+          updated_at: new Date().toISOString()
+        })
+        .eq('email', userEmail);
+
+      if (error) throw error;
+
       setNetWorth(Number(newNetWorth));
       setNewNetWorth("");
       setNetWorthOpen(false);
+      toast.success("Net worth updated successfully!");
+    } catch (error) {
+      console.error('Error updating net worth:', error);
+      toast.error("Failed to update net worth. Please try again.");
+    } finally {
+      setIsSavingNetWorth(false);
     }
   };
 
-  const handleIncomeUpdate = () => {
-    if (newIncome && !isNaN(Number(newIncome))) {
+  const handleIncomeUpdate = async () => {
+    if (!newIncome || isNaN(Number(newIncome)) || !user?.emailAddresses?.[0]?.emailAddress) return;
+
+    setIsSavingIncome(true);
+    const userEmail = user.emailAddresses[0].emailAddress;
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({
+          monthly_income: Number(newIncome),
+          updated_at: new Date().toISOString()
+        })
+        .eq('email', userEmail);
+
+      if (error) throw error;
+
       setMonthlyIncome(Number(newIncome));
       setNewIncome("");
       setIncomeOpen(false);
+      toast.success("Monthly income updated successfully!");
+    } catch (error) {
+      console.error('Error updating income:', error);
+      toast.error("Failed to update income. Please try again.");
+    } finally {
+      setIsSavingIncome(false);
     }
   };
 
-  const handleCreditUpdate = () => {
-    if (newCredit && !isNaN(Number(newCredit))) {
+  const handleCreditUpdate = async () => {
+    if (!newCredit || isNaN(Number(newCredit)) || !user?.emailAddresses?.[0]?.emailAddress) return;
+
+    setIsSavingCredit(true);
+    const userEmail = user.emailAddresses[0].emailAddress;
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({
+          credit_score: Number(newCredit),
+          updated_at: new Date().toISOString()
+        })
+        .eq('email', userEmail);
+
+      if (error) throw error;
+
       setCreditScore(Number(newCredit));
       setNewCredit("");
       setCreditOpen(false);
+      toast.success("Credit score updated successfully!");
+    } catch (error) {
+      console.error('Error updating credit score:', error);
+      toast.error("Failed to update credit score. Please try again.");
+    } finally {
+      setIsSavingCredit(false);
     }
   };
 
-  const handlePpfUpdate = () => {
-    if (newPpf.totalBalance && !isNaN(Number(newPpf.totalBalance))) {
+  const handlePpfUpdate = async () => {
+    if (!newPpf.totalBalance || isNaN(Number(newPpf.totalBalance)) || !user?.emailAddresses?.[0]?.emailAddress) return;
+
+    setIsSavingPpf(true);
+    const userEmail = user.emailAddresses[0].emailAddress;
+
+    try {
+      const { error } = await supabase
+        .from('ppf_balance')
+        .upsert({
+          user_email: userEmail,
+          total_balance: Number(newPpf.totalBalance),
+          annual_contribution: newPpf.annualContribution ? Number(newPpf.annualContribution) : null,
+          maturity_amount: newPpf.maturityAmount ? Number(newPpf.maturityAmount) : null,
+          interest_rate: newPpf.interestRate ? Number(newPpf.interestRate) : null,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_email' });
+
+      if (error) throw error;
+
       setPpfBalance({
         totalBalance: Number(newPpf.totalBalance),
         annualContribution: newPpf.annualContribution ? Number(newPpf.annualContribution) : null,
@@ -151,9 +396,450 @@ export default function DashboardPage() {
       });
       setNewPpf({ totalBalance: "", annualContribution: "", maturityAmount: "", interestRate: "" });
       setPpfOpen(false);
+      toast.success("PPF balance updated successfully!");
+    } catch (error) {
+      console.error('Error updating PPF balance:', error);
+      toast.error("Failed to update PPF balance. Please try again.");
+    } finally {
+      setIsSavingPpf(false);
     }
   };
 
+  // Asset handlers with edit functionality - FIXED
+  const handleAssetsSubmit = async () => {
+    const validAssets = newAssets.filter(asset =>
+      asset.name && asset.type && asset.value && !isNaN(Number(asset.value))
+    );
+
+    if (validAssets.length === 0 || !user?.emailAddresses?.[0]?.emailAddress) return;
+
+    setIsSavingAssets(true);
+    const userEmail = user.emailAddresses[0].emailAddress;
+
+    try {
+      if (editingAsset) {
+        // Update existing asset - Use string ID directly
+        const assetToUpdate = validAssets[0];
+        const { error } = await supabase
+          .from('assets')
+          .update({
+            name: assetToUpdate.name,
+            type: assetToUpdate.type,
+            value: Number(assetToUpdate.value),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingAsset.id); // Use string ID directly
+
+        if (error) throw error;
+
+        const updatedAssets = assets.map(asset =>
+          asset.id === editingAsset.id
+            ? {
+              ...asset,
+              name: assetToUpdate.name,
+              type: assetToUpdate.type,
+              value: Number(assetToUpdate.value),
+              updatedAt: new Date().toLocaleDateString()
+            }
+            : asset
+        );
+
+        setAssets(updatedAssets);
+        toast.success("Asset updated successfully!");
+      } else {
+        // Add new assets
+        const assetsToInsert = validAssets.map(asset => ({
+          user_email: userEmail,
+          name: asset.name,
+          type: asset.type,
+          value: Number(asset.value)
+        }));
+
+        const { data, error } = await supabase
+          .from('assets')
+          .insert(assetsToInsert)
+          .select();
+
+        if (error) throw error;
+
+        const newAssetsData = data?.map(asset => ({
+          id: asset.id, // Keep as string UUID
+          name: asset.name,
+          type: asset.type,
+          value: asset.value,
+          updatedAt: new Date(asset.created_at).toLocaleDateString()
+        })) || [];
+
+        setAssets([...assets, ...newAssetsData]);
+        toast.success(`${validAssets.length} asset(s) added successfully!`);
+      }
+
+      setNewAssets([{ name: "", type: "", value: "" }]);
+      setEditingAsset(null);
+      setAssetsOpen(false);
+    } catch (error) {
+      console.error('Error saving assets:', error);
+      toast.error("Failed to save assets. Please try again.");
+    } finally {
+      setIsSavingAssets(false);
+    }
+  };
+
+  const handleDeleteAsset = async (assetId: string) => { // Use string type
+    if (!user?.emailAddresses?.[0]?.emailAddress) return;
+
+    setIsDeletingAsset(assetId);
+
+    try {
+      const { error } = await supabase
+        .from('assets')
+        .delete()
+        .eq('id', assetId); // Use string ID directly
+
+      if (error) throw error;
+
+      setAssets(assets.filter(asset => asset.id !== assetId));
+      toast.success("Asset deleted successfully!");
+    } catch (error) {
+      console.error('Error deleting asset:', error);
+      toast.error("Failed to delete asset. Please try again.");
+    } finally {
+      setIsDeletingAsset(null);
+    }
+  };
+
+  const handleEditAsset = (asset: Asset) => {
+    setEditingAsset(asset);
+    setNewAssets([{
+      name: asset.name,
+      type: asset.type,
+      value: asset.value.toString()
+    }]);
+    setAssetsOpen(true);
+  };
+
+  // Liability handlers with edit functionality - FIXED
+  const handleLiabilitiesSubmit = async () => {
+    const validLiabilities = newLiabilities.filter(liability =>
+      liability.name && liability.type && liability.amount && !isNaN(Number(liability.amount))
+    );
+
+    if (validLiabilities.length === 0 || !user?.emailAddresses?.[0]?.emailAddress) return;
+
+    setIsSavingLiabilities(true);
+    const userEmail = user.emailAddresses[0].emailAddress;
+
+    try {
+      if (editingLiability) {
+        // Update existing liability - Use string ID directly
+        const liabilityToUpdate = validLiabilities[0];
+        const { error } = await supabase
+          .from('liabilities')
+          .update({
+            name: liabilityToUpdate.name,
+            type: liabilityToUpdate.type,
+            amount: Number(liabilityToUpdate.amount),
+            interest_rate: liabilityToUpdate.interestRate ? Number(liabilityToUpdate.interestRate) : null,
+            minimum_payment: liabilityToUpdate.minimumPayment ? Number(liabilityToUpdate.minimumPayment) : null,
+            due_date: liabilityToUpdate.dueDate || "Not specified",
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingLiability.id); // Use string ID directly
+
+        if (error) throw error;
+
+        const updatedLiabilities = liabilities.map(liability =>
+          liability.id === editingLiability.id
+            ? {
+              ...liability,
+              name: liabilityToUpdate.name,
+              type: liabilityToUpdate.type,
+              amount: Number(liabilityToUpdate.amount),
+              interestRate: liabilityToUpdate.interestRate ? Number(liabilityToUpdate.interestRate) : undefined,
+              minimumPayment: liabilityToUpdate.minimumPayment ? Number(liabilityToUpdate.minimumPayment) : undefined,
+              dueDate: liabilityToUpdate.dueDate || "Not specified",
+              updatedAt: new Date().toLocaleDateString()
+            }
+            : liability
+        );
+
+        setLiabilities(updatedLiabilities);
+        toast.success("Liability updated successfully!");
+      } else {
+        // Add new liabilities
+        const liabilitiesToInsert = validLiabilities.map(liability => ({
+          user_email: userEmail,
+          name: liability.name,
+          type: liability.type,
+          amount: Number(liability.amount),
+          interest_rate: liability.interestRate ? Number(liability.interestRate) : null,
+          minimum_payment: liability.minimumPayment ? Number(liability.minimumPayment) : null,
+          due_date: liability.dueDate || "Not specified"
+        }));
+
+        const { data, error } = await supabase
+          .from('liabilities')
+          .insert(liabilitiesToInsert)
+          .select();
+
+        if (error) throw error;
+
+        const newLiabilitiesData = data?.map(liability => ({
+          id: liability.id, // Keep as string UUID
+          name: liability.name,
+          type: liability.type,
+          amount: liability.amount,
+          interestRate: liability.interest_rate,
+          minimumPayment: liability.minimum_payment,
+          dueDate: liability.due_date || "Not specified",
+          updatedAt: new Date(liability.created_at).toLocaleDateString()
+        })) || [];
+
+        setLiabilities([...liabilities, ...newLiabilitiesData]);
+        toast.success(`${validLiabilities.length} liability(ies) added successfully!`);
+      }
+
+      setNewLiabilities([{ name: "", type: "", amount: "", interestRate: "", minimumPayment: "", dueDate: "" }]);
+      setEditingLiability(null);
+      setLiabilitiesOpen(false);
+    } catch (error) {
+      console.error('Error saving liabilities:', error);
+      toast.error("Failed to save liabilities. Please try again.");
+    } finally {
+      setIsSavingLiabilities(false);
+    }
+  };
+
+  const handleDeleteLiability = async (liabilityId: string) => { // Use string type
+    if (!user?.emailAddresses?.[0]?.emailAddress) return;
+
+    setIsDeletingLiability(liabilityId);
+
+    try {
+      const { error } = await supabase
+        .from('liabilities')
+        .delete()
+        .eq('id', liabilityId); // Use string ID directly
+
+      if (error) throw error;
+
+      setLiabilities(liabilities.filter(liability => liability.id !== liabilityId));
+      toast.success("Liability deleted successfully!");
+    } catch (error) {
+      console.error('Error deleting liability:', error);
+      toast.error("Failed to delete liability. Please try again.");
+    } finally {
+      setIsDeletingLiability(null);
+    }
+  };
+
+  const handleEditLiability = (liability: DashboardLiability) => {
+    setEditingLiability(liability);
+    setNewLiabilities([{
+      name: liability.name,
+      type: liability.type,
+      amount: liability.amount.toString(),
+      interestRate: liability.interestRate?.toString() || "",
+      minimumPayment: liability.minimumPayment?.toString() || "",
+      dueDate: liability.dueDate === "Not specified" ? "" : liability.dueDate
+    }]);
+    setLiabilitiesOpen(true);
+  };
+
+  // Investment handlers with edit functionality - FIXED
+  const handleInvestmentsSubmit = async () => {
+    const validInvestments = newInvestments.filter(investment =>
+      investment.name && investment.type && investment.shares && investment.currentPrice && investment.purchasePrice &&
+      !isNaN(Number(investment.shares)) && !isNaN(Number(investment.currentPrice)) && !isNaN(Number(investment.purchasePrice))
+    );
+
+    if (validInvestments.length === 0 || !user?.emailAddresses?.[0]?.emailAddress) return;
+
+    setIsSavingInvestments(true);
+    const userEmail = user.emailAddresses[0].emailAddress;
+
+    try {
+      if (editingInvestment) {
+        // Update existing investment - Use string ID directly
+        const investmentToUpdate = validInvestments[0];
+        const shares = Number(investmentToUpdate.shares);
+        const currentPrice = Number(investmentToUpdate.currentPrice);
+        const purchasePrice = Number(investmentToUpdate.purchasePrice);
+        const totalValue = shares * currentPrice;
+        const totalCost = shares * purchasePrice;
+        const gainLoss = totalValue - totalCost;
+        const gainLossPercentage = ((gainLoss / totalCost) * 100);
+
+        const { error } = await supabase
+          .from('investments')
+          .update({
+            name: investmentToUpdate.name,
+            type: investmentToUpdate.type,
+            shares,
+            current_price: currentPrice,
+            purchase_price: purchasePrice,
+            total_value: totalValue,
+            gain_loss: gainLoss,
+            gain_loss_percentage: gainLossPercentage,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingInvestment.id); // Use string ID directly
+
+        if (error) throw error;
+
+        const updatedInvestments = investments.map(investment =>
+          investment.id === editingInvestment.id
+            ? {
+              ...investment,
+              name: investmentToUpdate.name,
+              type: investmentToUpdate.type,
+              shares,
+              currentPrice,
+              totalValue,
+              gainLoss,
+              gainLossPercentage,
+              updatedAt: new Date().toLocaleDateString()
+            }
+            : investment
+        );
+
+        setInvestments(updatedInvestments);
+        toast.success("Investment updated successfully!");
+      } else {
+        // Add new investments
+        const investmentsToInsert = validInvestments.map(investment => {
+          const shares = Number(investment.shares);
+          const currentPrice = Number(investment.currentPrice);
+          const purchasePrice = Number(investment.purchasePrice);
+          const totalValue = shares * currentPrice;
+          const totalCost = shares * purchasePrice;
+          const gainLoss = totalValue - totalCost;
+          const gainLossPercentage = ((gainLoss / totalCost) * 100);
+
+          return {
+            user_email: userEmail,
+            name: investment.name,
+            type: investment.type,
+            shares,
+            current_price: currentPrice,
+            purchase_price: purchasePrice,
+            total_value: totalValue,
+            gain_loss: gainLoss,
+            gain_loss_percentage: gainLossPercentage
+          };
+        });
+
+        const { data, error } = await supabase
+          .from('investments')
+          .insert(investmentsToInsert)
+          .select();
+
+        if (error) throw error;
+
+        const newInvestmentsData = data?.map(investment => ({
+          id: investment.id, // Keep as string UUID
+          name: investment.name,
+          type: investment.type,
+          shares: investment.shares,
+          currentPrice: investment.current_price,
+          totalValue: investment.total_value,
+          gainLoss: investment.gain_loss,
+          gainLossPercentage: investment.gain_loss_percentage,
+          updatedAt: new Date(investment.created_at).toLocaleDateString()
+        })) || [];
+
+        setInvestments([...investments, ...newInvestmentsData]);
+        toast.success(`${validInvestments.length} investment(s) added successfully!`);
+      }
+
+      setNewInvestments([{ name: "", type: "", shares: "", currentPrice: "", purchasePrice: "" }]);
+      setEditingInvestment(null);
+      setInvestmentsOpen(false);
+    } catch (error) {
+      console.error('Error saving investments:', error);
+      toast.error("Failed to save investments. Please try again.");
+    } finally {
+      setIsSavingInvestments(false);
+    }
+  };
+
+  const handleDeleteInvestment = async (investmentId: string) => { // Use string type
+    if (!user?.emailAddresses?.[0]?.emailAddress) return;
+
+    setIsDeletingInvestment(investmentId);
+
+    try {
+      const { error } = await supabase
+        .from('investments')
+        .delete()
+        .eq('id', investmentId); // Use string ID directly
+
+      if (error) throw error;
+
+      setInvestments(investments.filter(investment => investment.id !== investmentId));
+      toast.success("Investment deleted successfully!");
+    } catch (error) {
+      console.error('Error deleting investment:', error);
+      toast.error("Failed to delete investment. Please try again.");
+    } finally {
+      setIsDeletingInvestment(null);
+    }
+  };
+
+  const handleEditInvestment = (investment: Investment) => {
+    setEditingInvestment(investment);
+    // Calculate purchase price from current data
+    const purchasePrice = investment.totalValue / investment.shares;
+    setNewInvestments([{
+      name: investment.name,
+      type: investment.type,
+      shares: investment.shares.toString(),
+      currentPrice: investment.currentPrice.toString(),
+      purchasePrice: (purchasePrice - (investment.gainLoss / investment.shares)).toFixed(2)
+    }]);
+    setInvestmentsOpen(true);
+  };
+
+  const handleDeletePpf = async () => {
+    if (!user?.emailAddresses?.[0]?.emailAddress) return;
+
+    setIsSavingPpf(true);
+    const userEmail = user.emailAddresses[0].emailAddress;
+
+    try {
+      const { error } = await supabase
+        .from('ppf_balance')
+        .delete()
+        .eq('user_email', userEmail);
+
+      if (error) throw error;
+
+      setPpfBalance({
+        totalBalance: null,
+        annualContribution: null,
+        maturityAmount: null,
+        interestRate: null
+      });
+      toast.success("PPF balance deleted successfully!");
+    } catch (error) {
+      console.error('Error deleting PPF balance:', error);
+      toast.error("Failed to delete PPF balance. Please try again.");
+    } finally {
+      setIsSavingPpf(false);
+    }
+  };
+
+  const handleEditPpf = () => {
+    setNewPpf({
+      totalBalance: ppfBalance.totalBalance?.toString() || "",
+      annualContribution: ppfBalance.annualContribution?.toString() || "",
+      maturityAmount: ppfBalance.maturityAmount?.toString() || "",
+      interestRate: ppfBalance.interestRate?.toString() || ""
+    });
+    setPpfOpen(true);
+  };
+
+  // Helper functions (unchanged)
   const addNewAssetField = () => {
     setNewAssets([...newAssets, { name: "", type: "", value: "" }]);
   };
@@ -165,13 +851,13 @@ export default function DashboardPage() {
   };
 
   const addNewLiabilityField = () => {
-    setNewLiabilities([...newLiabilities, { 
-      name: "", 
-      type: "", 
-      amount: "", 
-      interestRate: "", 
-      minimumPayment: "", 
-      dueDate: "" 
+    setNewLiabilities([...newLiabilities, {
+      name: "",
+      type: "",
+      amount: "",
+      interestRate: "",
+      minimumPayment: "",
+      dueDate: ""
     }]);
   };
 
@@ -197,126 +883,57 @@ export default function DashboardPage() {
     }
   };
 
-  interface NewAsset {
-    name: string;
-    type: string;
-    value: string;
-  }
-
-  interface NewLiability {
-    name: string;
-    type: string;
-    amount: string;
-    interestRate: string;
-    minimumPayment: string;
-    dueDate: string;
-  }
-
-  interface NewInvestment {
-    name: string;
-    type: string;
-    shares: string;
-    currentPrice: string;
-    purchasePrice: string;
-  }
-
   const updateAssetField = (index: number, field: keyof NewAsset, value: string) => {
-    const updatedAssets = newAssets.map((asset, i) => 
+    const updatedAssets = newAssets.map((asset, i) =>
       i === index ? { ...asset, [field]: value } : asset
     );
     setNewAssets(updatedAssets);
   };
 
   const updateLiabilityField = (index: number, field: keyof NewLiability, value: string) => {
-    const updatedLiabilities = newLiabilities.map((liability, i) => 
+    const updatedLiabilities = newLiabilities.map((liability, i) =>
       i === index ? { ...liability, [field]: value } : liability
     );
     setNewLiabilities(updatedLiabilities);
   };
 
   const updateInvestmentField = (index: number, field: keyof NewInvestment, value: string) => {
-    const updatedInvestments = newInvestments.map((investment, i) => 
+    const updatedInvestments = newInvestments.map((investment, i) =>
       i === index ? { ...investment, [field]: value } : investment
     );
     setNewInvestments(updatedInvestments);
   };
 
-  const handleAssetsSubmit = () => {
-    const validAssets = newAssets.filter(asset => 
-      asset.name && asset.type && asset.value && !isNaN(Number(asset.value))
-    );
-    
-    if (validAssets.length > 0) {
-      const assetsToAdd = validAssets.map((asset, index) => ({
-        id: assets.length + index + 1,
-        name: asset.name,
-        type: asset.type,
-        value: Number(asset.value),
-        updatedAt: new Date().toLocaleDateString()
-      }));
-      
-      setAssets([...assets, ...assetsToAdd]);
+  // Reset editing states when dialogs close
+  const handleAssetsDialogClose = (open: boolean) => {
+    if (!open) {
+      setEditingAsset(null);
       setNewAssets([{ name: "", type: "", value: "" }]);
-      setAssetsOpen(false);
     }
+    setAssetsOpen(open);
   };
 
-  const handleLiabilitiesSubmit = () => {
-    const validLiabilities = newLiabilities.filter(liability => 
-      liability.name && liability.type && liability.amount && !isNaN(Number(liability.amount))
-    );
-    
-    if (validLiabilities.length > 0) {
-      const liabilitiesToAdd = validLiabilities.map((liability, index) => ({
-        id: liabilities.length + index + 1,
-        name: liability.name,
-        type: liability.type,
-        amount: Number(liability.amount),
-        interestRate: liability.interestRate ? Number(liability.interestRate) : undefined,
-        minimumPayment: liability.minimumPayment ? Number(liability.minimumPayment) : undefined,
-        dueDate: liability.dueDate || "Not specified",
-        updatedAt: new Date().toLocaleDateString()
-      }));
-      
-      setLiabilities([...liabilities, ...liabilitiesToAdd]);
+  const handleLiabilitiesDialogClose = (open: boolean) => {
+    if (!open) {
+      setEditingLiability(null);
       setNewLiabilities([{ name: "", type: "", amount: "", interestRate: "", minimumPayment: "", dueDate: "" }]);
-      setLiabilitiesOpen(false);
     }
+    setLiabilitiesOpen(open);
   };
 
-  const handleInvestmentsSubmit = () => {
-    const validInvestments = newInvestments.filter(investment => 
-      investment.name && investment.type && investment.shares && investment.currentPrice && investment.purchasePrice &&
-      !isNaN(Number(investment.shares)) && !isNaN(Number(investment.currentPrice)) && !isNaN(Number(investment.purchasePrice))
-    );
-    
-    if (validInvestments.length > 0) {
-      const investmentsToAdd = validInvestments.map((investment, index) => {
-        const shares = Number(investment.shares);
-        const currentPrice = Number(investment.currentPrice);
-        const purchasePrice = Number(investment.purchasePrice);
-        const totalValue = shares * currentPrice;
-        const totalCost = shares * purchasePrice;
-        const gainLoss = totalValue - totalCost;
-        const gainLossPercentage = ((gainLoss / totalCost) * 100);
-
-        return {
-          id: investments.length + index + 1,
-          name: investment.name,
-          type: investment.type,
-          shares,
-          currentPrice,
-          totalValue,
-          gainLoss,
-          gainLossPercentage,
-          updatedAt: new Date().toLocaleDateString()
-        };
-      });
-      
-      setInvestments([...investments, ...investmentsToAdd]);
+  const handleInvestmentsDialogClose = (open: boolean) => {
+    if (!open) {
+      setEditingInvestment(null);
       setNewInvestments([{ name: "", type: "", shares: "", currentPrice: "", purchasePrice: "" }]);
-      setInvestmentsOpen(false);
     }
+    setInvestmentsOpen(open);
+  };
+
+  const handlePpfDialogClose = (open: boolean) => {
+    if (!open) {
+      setNewPpf({ totalBalance: "", annualContribution: "", maturityAmount: "", interestRate: "" });
+    }
+    setPpfOpen(open);
   };
 
   const totalAssets = assets.reduce((sum, asset) => sum + asset.value, 0);
@@ -334,6 +951,14 @@ export default function DashboardPage() {
     return { label: "Poor", color: "bg-red-100 text-red-800" };
   };
 
+  if (!isLoaded || isInitialLoading) {
+    return <div className="h-screen w-full flex justify-center items-center"> <Spinner /> </div>;
+  }
+
+  if (!user) {
+    return <div className="h-screen w-full flex justify-center items-center">Please sign in to continue.</div>;
+  }
+
   return (
     <>
       {/* Header */}
@@ -346,7 +971,7 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center space-x-4">
             <span className="text-sm text-muted-foreground">
-              Hello, {user?.user.firstName}
+              Hello, {user?.firstName}
             </span>
             <UserButton />
           </div>
@@ -365,20 +990,34 @@ export default function DashboardPage() {
 
         {/* Tab Navigation */}
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
-            <TabsTrigger value="overview" className="flex items-center space-x-2">
-              <Wallet className="h-4 w-4" />
-              <span>Portfolio</span>
-            </TabsTrigger>
-            <TabsTrigger value="analytics" className="flex items-center space-x-2">
-              <BarChart3 className="h-4 w-4" />
-              <span>Analytics</span>
-            </TabsTrigger>
-          </TabsList>
+          <div className="flex justify-between items-center">
+            <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
+              <TabsTrigger value="overview" className="flex items-center space-x-2">
+                <Wallet className="h-4 w-4" />
+                <span>Portfolio</span>
+              </TabsTrigger>
+              <TabsTrigger value="analytics" className="flex items-center space-x-2">
+                <BarChart3 className="h-4 w-4" />
+                <span>Analytics</span>
+              </TabsTrigger>
+            </TabsList>
+            <div className="flex gap-3">
+              <Link href={"/chat-with-fin"}>
+                <Button className="bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white transition-all duration-300">
+                  <Sparkles /> Chat with Fin.AI
+                </Button>
+              </Link>
+              <Link href={"/call-with-fin"}>
+                <Button className="bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white transition-all duration-300">
+                  <Sparkles /> Call with Fin.AI
+                </Button>
+              </Link>
+            </div>
+          </div>
 
           {/* Portfolio Tab Content */}
           <TabsContent value="overview" className="space-y-8">
-            {/* Financial Overview Cards */}
+            {/* Financial Overview Cards - Unchanged */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* Net Worth Card */}
               <Card className="border border-border shadow-none bg-green-50">
@@ -390,9 +1029,9 @@ export default function DashboardPage() {
                     <TrendingUp className="h-4 w-4 text-green-600" />
                     <Dialog open={netWorthOpen} onOpenChange={setNetWorthOpen}>
                       <DialogTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           className="h-8 w-8 p-0 text-muted-foreground hover:text-green-600 hover:bg-green-50"
                         >
                           <Plus className="h-4 w-4" />
@@ -417,22 +1056,32 @@ export default function DashboardPage() {
                               value={newNetWorth}
                               onChange={(e) => setNewNetWorth(e.target.value)}
                               className="h-10"
+                              disabled={isSavingNetWorth}
                             />
                           </div>
                         </div>
                         <div className="flex justify-end space-x-3 pt-4">
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             onClick={() => setNetWorthOpen(false)}
                             className="h-10 px-4"
+                            disabled={isSavingNetWorth}
                           >
                             Cancel
                           </Button>
-                          <Button 
-                            onClick={handleNetWorthUpdate} 
+                          <Button
+                            onClick={handleNetWorthUpdate}
                             className="h-10 px-4 bg-green-600 hover:bg-green-700"
+                            disabled={isSavingNetWorth}
                           >
-                            Update
+                            {isSavingNetWorth ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              "Update"
+                            )}
                           </Button>
                         </div>
                       </DialogContent>
@@ -474,9 +1123,9 @@ export default function DashboardPage() {
                     <DollarSign className="h-4 w-4 text-green-600" />
                     <Dialog open={incomeOpen} onOpenChange={setIncomeOpen}>
                       <DialogTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           className="h-8 w-8 p-0 text-muted-foreground hover:text-green-600 hover:bg-green-50"
                         >
                           <Plus className="h-4 w-4" />
@@ -501,22 +1150,32 @@ export default function DashboardPage() {
                               value={newIncome}
                               onChange={(e) => setNewIncome(e.target.value)}
                               className="h-10"
+                              disabled={isSavingIncome}
                             />
                           </div>
                         </div>
                         <div className="flex justify-end space-x-3 pt-4">
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             onClick={() => setIncomeOpen(false)}
                             className="h-10 px-4"
+                            disabled={isSavingIncome}
                           >
                             Cancel
                           </Button>
-                          <Button 
-                            onClick={handleIncomeUpdate} 
+                          <Button
+                            onClick={handleIncomeUpdate}
                             className="h-10 px-4 bg-green-600 hover:bg-green-700"
+                            disabled={isSavingIncome}
                           >
-                            Update
+                            {isSavingIncome ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              "Update"
+                            )}
                           </Button>
                         </div>
                       </DialogContent>
@@ -558,9 +1217,9 @@ export default function DashboardPage() {
                     <CreditCard className="h-4 w-4 text-green-600" />
                     <Dialog open={creditOpen} onOpenChange={setCreditOpen}>
                       <DialogTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           className="h-8 w-8 p-0 text-muted-foreground hover:text-green-600 hover:bg-green-50"
                         >
                           <Plus className="h-4 w-4" />
@@ -587,22 +1246,32 @@ export default function DashboardPage() {
                               value={newCredit}
                               onChange={(e) => setNewCredit(e.target.value)}
                               className="h-10"
+                              disabled={isSavingCredit}
                             />
                           </div>
                         </div>
                         <div className="flex justify-end space-x-3 pt-4">
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             onClick={() => setCreditOpen(false)}
                             className="h-10 px-4"
+                            disabled={isSavingCredit}
                           >
                             Cancel
                           </Button>
-                          <Button 
-                            onClick={handleCreditUpdate} 
+                          <Button
+                            onClick={handleCreditUpdate}
                             className="h-10 px-4 bg-green-600 hover:bg-green-700"
+                            disabled={isSavingCredit}
                           >
-                            Update
+                            {isSavingCredit ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              "Update"
+                            )}
                           </Button>
                         </div>
                       </DialogContent>
@@ -635,7 +1304,7 @@ export default function DashboardPage() {
               </Card>
             </div>
 
-            {/* Assets Section */}
+            {/* Assets Section with Edit/Delete */}
             <Card className="border border-border shadow-sm">
               <CardHeader className="pb-6">
                 <div className="flex items-center justify-between">
@@ -650,11 +1319,11 @@ export default function DashboardPage() {
                       </p>
                     </div>
                   </div>
-                  <Dialog open={assetsOpen} onOpenChange={setAssetsOpen}>
+                  <Dialog open={assetsOpen} onOpenChange={handleAssetsDialogClose}>
                     <DialogTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         className="h-9 px-3 text-green-600 border-green-200 hover:bg-green-50"
                       >
                         <Plus className="h-4 w-4 mr-2" />
@@ -663,9 +1332,14 @@ export default function DashboardPage() {
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
                       <DialogHeader className="space-y-3 pb-6">
-                        <DialogTitle className="text-xl">Add New Assets</DialogTitle>
+                        <DialogTitle className="text-xl">
+                          {editingAsset ? "Edit Asset" : "Add New Assets"}
+                        </DialogTitle>
                         <DialogDescription>
-                          Add one or more assets to your portfolio. You can add multiple assets at once.
+                          {editingAsset
+                            ? "Update the asset details below."
+                            : "Add one or more assets to your portfolio. You can add multiple assets at once."
+                          }
                         </DialogDescription>
                       </DialogHeader>
                       <div className="space-y-6">
@@ -673,7 +1347,7 @@ export default function DashboardPage() {
                           <div key={index} className="rounded-lg border border-border p-6 space-y-4 bg-card">
                             <div className="flex items-center justify-between">
                               <h4 className="text-sm font-medium text-foreground">Asset {index + 1}</h4>
-                              {newAssets.length > 1 && (
+                              {newAssets.length > 1 && !editingAsset && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -701,8 +1375,8 @@ export default function DashboardPage() {
                                 <Label htmlFor={`asset-type-${index}`} className="text-sm font-medium">
                                   Asset Type
                                 </Label>
-                                <Select 
-                                  value={asset.type} 
+                                <Select
+                                  value={asset.type}
                                   onValueChange={(value) => updateAssetField(index, 'type', value)}
                                 >
                                   <SelectTrigger className="h-10">
@@ -731,29 +1405,40 @@ export default function DashboardPage() {
                             </div>
                           </div>
                         ))}
-                        
-                        <Button
-                          variant="outline"
-                          onClick={addNewAssetField}
-                          className="w-full h-12 border-dashed border-green-200 text-green-600 hover:bg-green-50"
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add Another Asset
-                        </Button>
+
+                        {!editingAsset && (
+                          <Button
+                            variant="outline"
+                            onClick={addNewAssetField}
+                            className="w-full h-12 border-dashed border-green-200 text-green-600 hover:bg-green-50"
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Another Asset
+                          </Button>
+                        )}
                       </div>
                       <div className="flex justify-end space-x-3 pt-6 border-t border-border">
-                        <Button 
-                          variant="outline" 
-                          onClick={() => setAssetsOpen(false)}
+                        <Button
+                          variant="outline"
+                          onClick={() => handleAssetsDialogClose(false)}
                           className="h-10 px-4"
+                          disabled={isSavingAssets}
                         >
                           Cancel
                         </Button>
-                        <Button 
-                          onClick={handleAssetsSubmit} 
+                        <Button
+                          onClick={handleAssetsSubmit}
                           className="h-10 px-4 bg-green-600 hover:bg-green-700"
+                          disabled={isSavingAssets}
                         >
-                          Add Assets
+                          {isSavingAssets ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            editingAsset ? "Update Asset" : "Add Assets"
+                          )}
                         </Button>
                       </div>
                     </DialogContent>
@@ -770,18 +1455,49 @@ export default function DashboardPage() {
                             <h3 className="font-medium text-foreground">{asset.name}</h3>
                             <p className="text-sm text-muted-foreground">{asset.type}</p>
                           </div>
-                          <div className="text-right space-y-1">
-                            <div className="font-semibold text-foreground">
-                              ₹{asset.value.toLocaleString()}
+                          <div className="flex items-center space-x-4">
+                            <div className="text-right space-y-1">
+                              <div className="font-semibold text-foreground">
+                                ₹{asset.value.toLocaleString()}
+                              </div>
+                              <p className="text-xs text-muted-foreground">Updated {asset.updatedAt}</p>
                             </div>
-                            <p className="text-xs text-muted-foreground">Updated {asset.updatedAt}</p>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0"
+                                  disabled={isDeletingAsset === asset.id}
+                                >
+                                  {isDeletingAsset === asset.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <MoreVertical className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleEditAsset(asset)}>
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleDeleteAsset(asset.id)}
+                                  className="text-destructive"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </div>
                       ))}
                     </div>
-                    
+
                     <Separator className="my-6" />
-                    
+
                     <div className="flex items-center justify-between py-2">
                       <span className="text-lg font-semibold text-foreground">Total Assets</span>
                       <span className="text-2xl font-bold text-green-600">
@@ -812,7 +1528,7 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
 
-            {/* Liabilities Section */}
+            {/* Liabilities Section with Edit/Delete */}
             <Card className="border border-border shadow-sm">
               <CardHeader className="pb-6">
                 <div className="flex items-center justify-between">
@@ -827,11 +1543,11 @@ export default function DashboardPage() {
                       </p>
                     </div>
                   </div>
-                  <Dialog open={liabilitiesOpen} onOpenChange={setLiabilitiesOpen}>
+                  <Dialog open={liabilitiesOpen} onOpenChange={handleLiabilitiesDialogClose}>
                     <DialogTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         className="h-9 px-3 text-red-600 border-red-200 hover:bg-red-50"
                       >
                         <Plus className="h-4 w-4 mr-2" />
@@ -840,9 +1556,14 @@ export default function DashboardPage() {
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
                       <DialogHeader className="space-y-3 pb-6">
-                        <DialogTitle className="text-xl">Add New Liabilities</DialogTitle>
+                        <DialogTitle className="text-xl">
+                          {editingLiability ? "Edit Liability" : "Add New Liabilities"}
+                        </DialogTitle>
                         <DialogDescription>
-                          Add one or more debts or liabilities. You can add multiple liabilities at once.
+                          {editingLiability
+                            ? "Update the liability details below."
+                            : "Add one or more debts or liabilities. You can add multiple liabilities at once."
+                          }
                         </DialogDescription>
                       </DialogHeader>
                       <div className="space-y-6">
@@ -850,7 +1571,7 @@ export default function DashboardPage() {
                           <div key={index} className="rounded-lg border border-border p-6 space-y-4 bg-card">
                             <div className="flex items-center justify-between">
                               <h4 className="text-sm font-medium text-foreground">Liability {index + 1}</h4>
-                              {newLiabilities.length > 1 && (
+                              {newLiabilities.length > 1 && !editingLiability && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -878,8 +1599,8 @@ export default function DashboardPage() {
                                 <Label htmlFor={`liability-type-${index}`} className="text-sm font-medium">
                                   Liability Type
                                 </Label>
-                                <Select 
-                                  value={liability.type} 
+                                <Select
+                                  value={liability.type}
                                   onValueChange={(value) => updateLiabilityField(index, 'type', value)}
                                 >
                                   <SelectTrigger className="h-10">
@@ -947,29 +1668,40 @@ export default function DashboardPage() {
                             </div>
                           </div>
                         ))}
-                        
-                        <Button
-                          variant="outline"
-                          onClick={addNewLiabilityField}
-                          className="w-full h-12 border-dashed border-red-200 text-red-600 hover:bg-red-50"
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add Another Liability
-                        </Button>
+
+                        {!editingLiability && (
+                          <Button
+                            variant="outline"
+                            onClick={addNewLiabilityField}
+                            className="w-full h-12 border-dashed border-red-200 text-red-600 hover:bg-red-50"
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Another Liability
+                          </Button>
+                        )}
                       </div>
                       <div className="flex justify-end space-x-3 pt-6 border-t border-border">
-                        <Button 
-                          variant="outline" 
-                          onClick={() => setLiabilitiesOpen(false)}
+                        <Button
+                          variant="outline"
+                          onClick={() => handleLiabilitiesDialogClose(false)}
                           className="h-10 px-4"
+                          disabled={isSavingLiabilities}
                         >
                           Cancel
                         </Button>
-                        <Button 
-                          onClick={handleLiabilitiesSubmit} 
+                        <Button
+                          onClick={handleLiabilitiesSubmit}
                           className="h-10 px-4 bg-red-600 hover:bg-red-700"
+                          disabled={isSavingLiabilities}
                         >
-                          Add Liabilities
+                          {isSavingLiabilities ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            editingLiability ? "Update Liability" : "Add Liabilities"
+                          )}
                         </Button>
                       </div>
                     </DialogContent>
@@ -994,19 +1726,50 @@ export default function DashboardPage() {
                                 {liability.minimumPayment && <span>EMI: ₹{liability.minimumPayment.toLocaleString()}</span>}
                               </div>
                             </div>
-                            <div className="text-right space-y-1">
-                              <div className="font-semibold text-red-600">
-                                ₹{liability.amount.toLocaleString()}
+                            <div className="flex items-center space-x-4">
+                              <div className="text-right space-y-1">
+                                <div className="font-semibold text-red-600">
+                                  ₹{liability.amount.toLocaleString()}
+                                </div>
+                                <p className="text-xs text-muted-foreground">Updated {liability.updatedAt}</p>
                               </div>
-                              <p className="text-xs text-muted-foreground">Updated {liability.updatedAt}</p>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                    disabled={isDeletingLiability === liability.id}
+                                  >
+                                    {isDeletingLiability === liability.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <MoreVertical className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handleEditLiability(liability)}>
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    Edit
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => handleDeleteLiability(liability.id)}
+                                    className="text-destructive"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </div>
                         </div>
                       ))}
                     </div>
-                    
+
                     <Separator className="my-6" />
-                    
+
                     <div className="flex items-center justify-between py-2">
                       <span className="text-lg font-semibold text-foreground">Total Liabilities</span>
                       <span className="text-2xl font-bold text-red-600">
@@ -1037,7 +1800,7 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
 
-            {/* PPF Balance Section */}
+            {/* PPF Balance Section with Edit/Delete */}
             <Card className="border border-border shadow-sm">
               <CardHeader className="pb-6">
                 <div className="flex items-center justify-between">
@@ -1052,11 +1815,11 @@ export default function DashboardPage() {
                       </p>
                     </div>
                   </div>
-                  <Dialog open={ppfOpen} onOpenChange={setPpfOpen}>
+                  <Dialog open={ppfOpen} onOpenChange={handlePpfDialogClose}>
                     <DialogTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         className="h-9 px-3 text-blue-600 border-blue-200 hover:bg-blue-50"
                       >
                         <Plus className="h-4 w-4 mr-2" />
@@ -1082,6 +1845,7 @@ export default function DashboardPage() {
                             value={newPpf.totalBalance}
                             onChange={(e) => setNewPpf({ ...newPpf, totalBalance: e.target.value })}
                             className="h-10"
+                            disabled={isSavingPpf}
                           />
                         </div>
                         <div className="space-y-2">
@@ -1095,6 +1859,7 @@ export default function DashboardPage() {
                             value={newPpf.annualContribution}
                             onChange={(e) => setNewPpf({ ...newPpf, annualContribution: e.target.value })}
                             className="h-10"
+                            disabled={isSavingPpf}
                           />
                         </div>
                         <div className="space-y-2">
@@ -1108,6 +1873,7 @@ export default function DashboardPage() {
                             value={newPpf.maturityAmount}
                             onChange={(e) => setNewPpf({ ...newPpf, maturityAmount: e.target.value })}
                             className="h-10"
+                            disabled={isSavingPpf}
                           />
                         </div>
                         <div className="space-y-2">
@@ -1122,22 +1888,32 @@ export default function DashboardPage() {
                             value={newPpf.interestRate}
                             onChange={(e) => setNewPpf({ ...newPpf, interestRate: e.target.value })}
                             className="h-10"
+                            disabled={isSavingPpf}
                           />
                         </div>
                       </div>
                       <div className="flex justify-end space-x-3 pt-6 border-t border-border">
-                        <Button 
-                          variant="outline" 
-                          onClick={() => setPpfOpen(false)}
+                        <Button
+                          variant="outline"
+                          onClick={() => handlePpfDialogClose(false)}
                           className="h-10 px-4"
+                          disabled={isSavingPpf}
                         >
                           Cancel
                         </Button>
-                        <Button 
-                          onClick={handlePpfUpdate} 
+                        <Button
+                          onClick={handlePpfUpdate}
                           className="h-10 px-4 bg-blue-600 hover:bg-blue-700"
+                          disabled={isSavingPpf}
                         >
-                          Update PPF
+                          {isSavingPpf ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            "Update PPF"
+                          )}
                         </Button>
                       </div>
                     </DialogContent>
@@ -1147,13 +1923,39 @@ export default function DashboardPage() {
               <CardContent className="space-y-6">
                 {ppfBalance.totalBalance !== null ? (
                   <div className="space-y-6">
-                    <div className="text-center py-6 bg-blue-50 rounded-lg">
+                    <div className="text-center py-6 bg-blue-50 rounded-lg relative">
+                      <div className="absolute top-2 right-2">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={handleEditPpf}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={handleDeletePpf}
+                              className="text-destructive"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                       <div className="text-3xl font-bold text-foreground mb-2">
                         ₹{ppfBalance.totalBalance.toLocaleString()}
                       </div>
                       <p className="text-sm text-muted-foreground">Total PPF Balance</p>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {ppfBalance.annualContribution && (
                         <div className="text-center p-4 bg-green-50 rounded-lg">
@@ -1163,7 +1965,7 @@ export default function DashboardPage() {
                           <p className="text-sm text-muted-foreground">Annual Contribution</p>
                         </div>
                       )}
-                      
+
                       {ppfBalance.maturityAmount && (
                         <div className="text-center p-4 bg-blue-50 rounded-lg">
                           <div className="text-xl font-bold text-blue-700 mb-1">
@@ -1173,7 +1975,7 @@ export default function DashboardPage() {
                         </div>
                       )}
                     </div>
-                    
+
                     {ppfBalance.interestRate && (
                       <div className="flex items-center justify-between py-3 border-t border-border">
                         <span className="text-sm font-medium text-foreground">Interest Rate</span>
@@ -1206,7 +2008,7 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
 
-            {/* Investments Section */}
+            {/* Investments Section with Edit/Delete */}
             <Card className="border border-border shadow-sm">
               <CardHeader className="pb-6">
                 <div className="flex items-center justify-between">
@@ -1221,11 +2023,11 @@ export default function DashboardPage() {
                       </p>
                     </div>
                   </div>
-                  <Dialog open={investmentsOpen} onOpenChange={setInvestmentsOpen}>
+                  <Dialog open={investmentsOpen} onOpenChange={handleInvestmentsDialogClose}>
                     <DialogTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         className="h-9 px-3 text-purple-600 border-purple-200 hover:bg-purple-50"
                       >
                         <Plus className="h-4 w-4 mr-2" />
@@ -1234,9 +2036,14 @@ export default function DashboardPage() {
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
                       <DialogHeader className="space-y-3 pb-6">
-                        <DialogTitle className="text-xl">Add New Investments</DialogTitle>
+                        <DialogTitle className="text-xl">
+                          {editingInvestment ? "Edit Investment" : "Add New Investments"}
+                        </DialogTitle>
                         <DialogDescription>
-                          Add one or more investments to track their performance. You can add multiple investments at once.
+                          {editingInvestment
+                            ? "Update the investment details below."
+                            : "Add one or more investments to track their performance. You can add multiple investments at once."
+                          }
                         </DialogDescription>
                       </DialogHeader>
                       <div className="space-y-6">
@@ -1244,7 +2051,7 @@ export default function DashboardPage() {
                           <div key={index} className="rounded-lg border border-border p-6 space-y-4 bg-card">
                             <div className="flex items-center justify-between">
                               <h4 className="text-sm font-medium text-foreground">Investment {index + 1}</h4>
-                              {newInvestments.length > 1 && (
+                              {newInvestments.length > 1 && !editingInvestment && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -1272,8 +2079,8 @@ export default function DashboardPage() {
                                 <Label htmlFor={`investment-type-${index}`} className="text-sm font-medium">
                                   Investment Type
                                 </Label>
-                                <Select 
-                                  value={investment.type} 
+                                <Select
+                                  value={investment.type}
                                   onValueChange={(value) => updateInvestmentField(index, 'type', value)}
                                 >
                                   <SelectTrigger className="h-10">
@@ -1330,29 +2137,40 @@ export default function DashboardPage() {
                             </div>
                           </div>
                         ))}
-                        
-                        <Button
-                          variant="outline"
-                          onClick={addNewInvestmentField}
-                          className="w-full h-12 border-dashed border-purple-200 text-purple-600 hover:bg-purple-50"
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add Another Investment
-                        </Button>
+
+                        {!editingInvestment && (
+                          <Button
+                            variant="outline"
+                            onClick={addNewInvestmentField}
+                            className="w-full h-12 border-dashed border-purple-200 text-purple-600 hover:bg-purple-50"
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Another Investment
+                          </Button>
+                        )}
                       </div>
                       <div className="flex justify-end space-x-3 pt-6 border-t border-border">
-                        <Button 
-                          variant="outline" 
-                          onClick={() => setInvestmentsOpen(false)}
+                        <Button
+                          variant="outline"
+                          onClick={() => handleInvestmentsDialogClose(false)}
                           className="h-10 px-4"
+                          disabled={isSavingInvestments}
                         >
                           Cancel
                         </Button>
-                        <Button 
-                          onClick={handleInvestmentsSubmit} 
+                        <Button
+                          onClick={handleInvestmentsSubmit}
                           className="h-10 px-4 bg-purple-600 hover:bg-purple-700"
+                          disabled={isSavingInvestments}
                         >
-                          Add Investments
+                          {isSavingInvestments ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            editingInvestment ? "Update Investment" : "Add Investments"
+                          )}
                         </Button>
                       </div>
                     </DialogContent>
@@ -1375,25 +2193,55 @@ export default function DashboardPage() {
                                 Current: ₹{investment.currentPrice.toFixed(2)}
                               </p>
                             </div>
-                            <div className="text-right space-y-1">
-                              <div className="font-semibold text-foreground">
-                                ₹{investment.totalValue.toFixed(2)}
+                            <div className="flex items-center space-x-4">
+                              <div className="text-right space-y-1">
+                                <div className="font-semibold text-foreground">
+                                  ₹{investment.totalValue.toFixed(2)}
+                                </div>
+                                <div className={`text-sm font-medium ${investment.gainLoss >= 0 ? 'text-green-600' : 'text-red-600'
+                                  }`}>
+                                  {investment.gainLoss >= 0 ? '+' : ''}
+                                  {investment.gainLossPercentage.toFixed(2)}%
+                                </div>
+                                <p className="text-xs text-muted-foreground">Updated {investment.updatedAt}</p>
                               </div>
-                              <div className={`text-sm font-medium ${
-                                investment.gainLoss >= 0 ? 'text-green-600' : 'text-red-600'
-                              }`}>
-                                {investment.gainLoss >= 0 ? '+' : ''}
-                                {investment.gainLossPercentage.toFixed(2)}%
-                              </div>
-                              <p className="text-xs text-muted-foreground">Updated {investment.updatedAt}</p>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                    disabled={isDeletingInvestment === investment.id}
+                                  >
+                                    {isDeletingInvestment === investment.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <MoreVertical className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handleEditInvestment(investment)}>
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    Edit
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => handleDeleteInvestment(investment.id)}
+                                    className="text-destructive"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </div>
                         </div>
                       ))}
                     </div>
-                    
+
                     <Separator className="my-6" />
-                    
+
                     <div className="flex items-center justify-between py-2">
                       <span className="text-lg font-semibold text-foreground">Portfolio Value</span>
                       <span className="text-2xl font-bold text-purple-600">
@@ -1431,9 +2279,15 @@ export default function DashboardPage() {
               netWorth={netWorth}
               monthlyIncome={monthlyIncome}
               creditScore={creditScore}
-              assets={assets}
-              liabilities={liabilities}
-              investments={investments}
+              assets={assets.map(asset => ({
+                ...asset,
+                id: typeof asset.id === "string" ? Number(asset.id) : asset.id
+              }))}
+              liabilities={liabilities as any}
+              investments={investments.map(inv => ({
+                ...inv,
+                id: typeof inv.id === "string" ? Number(inv.id) : inv.id
+              }))}
               epfBalance={{
                 totalBalance: ppfBalance.totalBalance,
                 employeeContribution: ppfBalance.annualContribution,
