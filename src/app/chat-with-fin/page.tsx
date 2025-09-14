@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Inter } from 'next/font/google';
 import ChatInput from '@/components/chat-input';
 import MessagesContainer from '@/components/message-container';
+import { supabase } from '@/lib/supabase';
 
 const inter = Inter({
     subsets: ["latin"],
     weight: ['100', '200', '300', '400', '500', '600', '700'],
-})
+});
 
 interface Message {
     role: 'user' | 'assistant';
@@ -19,11 +20,69 @@ interface Message {
     timestamp: Date;
 }
 
+interface FinancialData {
+    user: any;
+    assets: any[];
+    liabilities: any[];
+    investments: any[];
+    ppf: any;
+}
+
 export default function ChatWithFinAI() {
     const router = useRouter();
     const { user, isLoaded } = useUser();
     const [messages, setMessages] = useState<Message[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [isLoadingData, setIsLoadingData] = useState(true);
+    const [financialData, setFinancialData] = useState<FinancialData | null>(null);
+
+    // Function to get user's financial data
+    const getUserFinancialData = async (userEmail: string) => {
+        try {
+            // Get user basic info
+            const { data: userData } = await supabase
+                .from('users')
+                .select('*')
+                .eq('email', userEmail)
+                .single();
+
+            // Get assets
+            const { data: assetsData } = await supabase
+                .from('assets')
+                .select('*')
+                .eq('user_email', userEmail);
+
+            // Get liabilities
+            const { data: liabilitiesData } = await supabase
+                .from('liabilities')
+                .select('*')
+                .eq('user_email', userEmail);
+
+            // Get investments
+            const { data: investmentsData } = await supabase
+                .from('investments')
+                .select('*')
+                .eq('user_email', userEmail);
+
+            // Get PPF balance
+            const { data: ppfData } = await supabase
+                .from('ppf_balance')
+                .select('*')
+                .eq('user_email', userEmail)
+                .single();
+
+            return {
+                user: userData,
+                assets: assetsData || [],
+                liabilities: liabilitiesData || [],
+                investments: investmentsData || [],
+                ppf: ppfData
+            };
+        } catch (error) {
+            console.error('Error fetching financial data:', error);
+            return null;
+        }
+    };
 
     // Redirect if user is not signed in
     useEffect(() => {
@@ -32,34 +91,39 @@ export default function ChatWithFinAI() {
         }
     }, [isLoaded, user, router]);
 
+    // Load financial data when component mounts
+    useEffect(() => {
+        const loadFinancialData = async () => {
+            if (isLoaded && user?.emailAddresses?.[0]?.emailAddress) {
+                setIsLoadingData(true);
+                const userEmail = user.emailAddresses[0].emailAddress;
+                const data = await getUserFinancialData(userEmail);
+                setFinancialData(data);
+                setIsLoadingData(false);
+            }
+        };
+
+        loadFinancialData();
+    }, [isLoaded, user]);
+
     // Initial greeting with FinAI branding
     useEffect(() => {
-        if (isLoaded && user) {
+        if (isLoaded && user && !isLoadingData) {
             const greeting: Message = {
                 role: 'assistant',
-                content: `Hi ${user.firstName || 'there'}! I'm FinAI, your personal financial assistant. How can I help you with your finances today?`,
+                content: `Hi ${user.firstName || 'there'}! I'm FinAI, your personal financial assistant. I have access to your financial data and can help you with budgeting, investment advice, expense analysis, and financial planning. What would you like to know about your finances?`,
                 timestamp: new Date()
             };
             setMessages([greeting]);
         }
-    }, [isLoaded, user]);
-
-    // Dummy responses for testing
-    const getDummyResponse = (userMessage: string): string => {
-        const responses = [
-            "Thank you for your question! As FinAI, I'm here to help you with financial planning and analysis.",
-            "That's an interesting financial topic. Let me provide you with some insights based on current market trends.",
-            "I understand your concern about financial matters. Here are some recommendations I can offer:",
-            "Great question! Financial planning is crucial, and I'm here to guide you through it.",
-            "Based on your inquiry, here's what I suggest for your financial situation:"
-        ];
-        
-        // Simple logic to vary responses
-        const responseIndex = userMessage.length % responses.length;
-        return responses[responseIndex];
-    };
+    }, [isLoaded, user, isLoadingData]);
 
     const handleSendMessage = async (messageContent: string) => {
+        if (!financialData) {
+            console.error('Financial data not available');
+            return;
+        }
+
         const userMessage: Message = {
             role: 'user',
             content: messageContent,
@@ -70,19 +134,70 @@ export default function ChatWithFinAI() {
         setIsLoading(true);
 
         try {
-            // Simulate API delay
-            await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
-            
-            // Get dummy response
-            const dummyResponse = getDummyResponse(messageContent);
-            
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: messageContent,
+                    financialData: financialData, // Pass the financial data
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to get response');
+            }
+
+            // Handle streaming response
+            const reader = response.body?.getReader();
+            const decoder = new TextDecoder();
+            let assistantContent = '';
+
+            // Add initial assistant message
             const assistantMessage: Message = {
                 role: 'assistant',
-                content: dummyResponse,
+                content: '',
                 timestamp: new Date()
             };
-
             setMessages(prev => [...prev, assistantMessage]);
+
+            if (reader) {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if (data === '[DONE]') {
+                                break;
+                            }
+                            try {
+                                const parsed = JSON.parse(data);
+                                if (parsed.content) {
+                                    assistantContent += parsed.content;
+                                    // Update the last message (assistant message)
+                                    setMessages(prev => {
+                                        const updated = [...prev];
+                                        updated[updated.length - 1] = {
+                                            ...updated[updated.length - 1],
+                                            content: assistantContent
+                                        };
+                                        return updated;
+                                    });
+                                }
+                            } catch (e) {
+                                // Ignore parsing errors for malformed chunks
+                            }
+                        }
+                    }
+                }
+            }
+
         } catch (error) {
             console.error('Error sending message:', error);
             const errorMessage: Message = {
@@ -100,11 +215,14 @@ export default function ChatWithFinAI() {
         router.push('/dashboard');
     };
 
-    // Show loading while auth state is being determined
-    if (!isLoaded) {
+    // Show loading while auth state is being determined or financial data is loading
+    if (!isLoaded || isLoadingData) {
         return (
-            <div className="h-screen flex items-center justify-center">
+            <div className="h-screen flex flex-col items-center justify-center space-y-4">
                 <div className="w-8 h-8 border-2 border-green-300 border-t-green-500 rounded-full animate-spin" />
+                <p className="text-sm text-muted-foreground">
+                    {!isLoaded ? 'Loading...' : 'Loading your financial data...'}
+                </p>
             </div>
         );
     }
@@ -114,16 +232,32 @@ export default function ChatWithFinAI() {
         return null;
     }
 
+    // Show error if financial data couldn't be loaded
+    if (!financialData) {
+        return (
+            <div className="h-screen flex flex-col items-center justify-center space-y-4">
+                <div className="text-red-500 text-center">
+                    <p className="text-lg font-semibold">Unable to load financial data</p>
+                    <p className="text-sm">Please try refreshing the page or go back to dashboard.</p>
+                </div>
+                <Button onClick={handleBack} variant="outline">
+                    <ChevronLeft className="mr-2 h-4 w-4" />
+                    Back to Dashboard
+                </Button>
+            </div>
+        );
+    }
+
     return (
         <div className={`h-screen flex flex-col ${inter.className}`}>
             {/* Custom scrollbar styles */}
             <style jsx global>{`
                 .hide-scrollbar {
-                    -ms-overflow-style: none;  /* Internet Explorer 10+ */
-                    scrollbar-width: none;  /* Firefox */
+                    -ms-overflow-style: none;
+                    scrollbar-width: none;
                 }
                 .hide-scrollbar::-webkit-scrollbar {
-                    display: none;  /* Safari and Chrome */
+                    display: none;
                 }
                 
                 .smooth-scroll {
