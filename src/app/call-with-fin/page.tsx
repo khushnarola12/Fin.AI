@@ -8,6 +8,7 @@ import { useUser } from "@clerk/nextjs";
 import Vapi from "@vapi-ai/web";
 import { Spinner } from "@/components/spinner";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/lib/supabase";
 
 const VAPI_API_KEY = process.env.NEXT_PUBLIC_VAPI_API_KEY!;
 const ASSISTANT_ID = process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID!;
@@ -15,12 +16,22 @@ const ASSISTANT_ID = process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID!;
 type CallState = "idle" | "connecting" | "active" | "ended";
 type Mode = "speaking" | "listening";
 
+interface FinancialData {
+    user: any;
+    assets: any[];
+    liabilities: any[];
+    investments: any[];
+    ppf: any;
+}
+
 export default function ChatWithFinAI() {
     const router = useRouter();
     const { isSignedIn, isLoaded, user } = useUser();
 
     // ALL STATE AND REFS - MUST BE BEFORE CONDITIONAL RETURNS
     const [isClient, setIsClient] = useState(false);
+    const [isLoadingData, setIsLoadingData] = useState(true);
+    const [financialData, setFinancialData] = useState<FinancialData | null>(null);
     const vapiRef = useRef<InstanceType<typeof Vapi> | null>(null);
     const [isReady, setIsReady] = useState(false);
     const [callState, setCallState] = useState<CallState>("idle");
@@ -37,14 +48,110 @@ export default function ChatWithFinAI() {
     );
 
     const canStart = useMemo(
-        () => (callState === "idle" || callState === "ended") && isReady,
-        [callState, isReady]
+        () => (callState === "idle" || callState === "ended") && isReady && financialData,
+        [callState, isReady, financialData]
     );
 
     const canEnd = useMemo(
         () => callState === "connecting" || callState === "active",
         [callState]
     );
+
+    // Function to get user's financial data
+    const getUserFinancialData = async (userEmail: string) => {
+        try {
+            console.log("📊 Fetching financial data for:", userEmail);
+            
+            // Get user basic info
+            const { data: userData } = await supabase
+                .from('users')
+                .select('*')
+                .eq('email', userEmail)
+                .single();
+
+            // Get assets
+            const { data: assetsData } = await supabase
+                .from('assets')
+                .select('*')
+                .eq('user_email', userEmail);
+
+            // Get liabilities
+            const { data: liabilitiesData } = await supabase
+                .from('liabilities')
+                .select('*')
+                .eq('user_email', userEmail);
+
+            // Get investments
+            const { data: investmentsData } = await supabase
+                .from('investments')
+                .select('*')
+                .eq('user_email', userEmail);
+
+            // Get PPF balance
+            const { data: ppfData } = await supabase
+                .from('ppf_balance')
+                .select('*')
+                .eq('user_email', userEmail)
+                .single();
+
+            return {
+                user: userData,
+                assets: assetsData || [],
+                liabilities: liabilitiesData || [],
+                investments: investmentsData || [],
+                ppf: ppfData
+            };
+        } catch (error) {
+            console.error('Error fetching financial data:', error);
+            return null;
+        }
+    };
+
+    // Format financial data for VAPI variables
+    const formatFinancialDataForVapi = (data: FinancialData) => {
+        const { user, assets, liabilities, investments, ppf } = data;
+        
+        // Calculate totals
+        const totalAssets = assets.reduce((sum: number, asset: any) => sum + asset.value, 0);
+        const totalLiabilities = liabilities.reduce((sum: number, liability: any) => sum + liability.amount, 0);
+        const totalInvestments = investments.reduce((sum: number, investment: any) => sum + investment.total_value, 0);
+        const netWorth = user?.net_worth || (totalAssets - totalLiabilities);
+
+        return {
+            // Basic info
+            firstName: user?.firstName || "there",
+            netWorth: netWorth?.toLocaleString() || "0",
+            monthlyIncome: user?.monthly_income?.toLocaleString() || "Not set",
+            creditScore: user?.credit_score?.toString() || "Not set",
+            
+            // Totals
+            totalAssets: totalAssets.toLocaleString(),
+            totalLiabilities: totalLiabilities.toLocaleString(),
+            totalInvestments: totalInvestments.toLocaleString(),
+            ppfBalance: ppf?.total_balance?.toLocaleString() || "0",
+            
+            // Asset details
+            assetsCount: assets.length.toString(),
+            topAsset: assets.length > 0 ? assets.reduce((max, asset) => asset.value > max.value ? asset : max).name : "None",
+            
+            // Liability details
+            liabilitiesCount: liabilities.length.toString(),
+            highestDebt: liabilities.length > 0 ? liabilities.reduce((max, liability) => liability.amount > max.amount ? liability : max).name : "None",
+            
+            // Investment details
+            investmentsCount: investments.length.toString(),
+            bestPerformer: investments.length > 0 ? investments.reduce((max, inv) => inv.gain_loss_percentage > max.gain_loss_percentage ? inv : max).name : "None",
+            portfolioGain: investments.length > 0 ? investments.reduce((sum, inv) => sum + inv.gain_loss, 0).toFixed(0) : "0",
+            
+            // PPF details
+            ppfContribution: ppf?.annual_contribution?.toLocaleString() || "0",
+            ppfInterestRate: ppf?.interest_rate?.toString() || "7.1",
+            
+            // Financial health indicators
+            debtToIncomeRatio: user?.monthly_income ? ((totalLiabilities / 12) / user.monthly_income * 100).toFixed(1) : "0",
+            investmentToIncomeRatio: user?.monthly_income ? ((totalInvestments / 12) / user.monthly_income * 100).toFixed(1) : "0"
+        };
+    };
 
     // ALL EFFECTS - MUST BE BEFORE CONDITIONAL RETURNS
     useEffect(() => setIsClient(true), []);
@@ -55,6 +162,21 @@ export default function ChatWithFinAI() {
             router.push("/");
         }
     }, [isLoaded, isSignedIn, router]);
+
+    // Load financial data when component mounts
+    useEffect(() => {
+        const loadFinancialData = async () => {
+            if (isLoaded && user?.emailAddresses?.[0]?.emailAddress) {
+                setIsLoadingData(true);
+                const userEmail = user.emailAddresses[0].emailAddress;
+                const data = await getUserFinancialData(userEmail);
+                setFinancialData(data);
+                setIsLoadingData(false);
+            }
+        };
+
+        loadFinancialData();
+    }, [isLoaded, user]);
 
     // Initialize Vapi once on client
     useEffect(() => {
@@ -168,16 +290,23 @@ export default function ChatWithFinAI() {
             return;
         }
 
+        if (!financialData) {
+            setError("Financial data not loaded yet. Please wait.");
+            return;
+        }
+
         if (isInCall) return;
 
         try {
             setCallState("connecting");
-            const firstName = user?.firstName || "there";
-            console.log("🚀 Starting call with firstName:", firstName);
+            
+            // Format financial data for VAPI
+            const vapiVariables = formatFinancialDataForVapi(financialData)
 
             await vapiRef.current.start(ASSISTANT_ID, {
                 variableValues: {
-                    firstName: firstName
+                    firstName: user?.firstName || "there",
+                    financeData: vapiVariables
                 }
             });
         } catch (e: any) {
@@ -185,7 +314,7 @@ export default function ChatWithFinAI() {
             setError(e?.message ?? "Failed to start call");
             setCallState("ended");
         }
-    }, [isClient, isInCall, user]);
+    }, [isClient, isInCall, financialData]);
 
     const endCall = useCallback(async () => {
         setError(null);
@@ -197,7 +326,7 @@ export default function ChatWithFinAI() {
         } catch (e: any) {
             setError(e?.message ?? "Failed to end call");
         }
-    }, [])
+    }, []);
 
     const handleBack = useCallback(async () => {
         if (isInCall) {
@@ -212,11 +341,14 @@ export default function ChatWithFinAI() {
 
     // NOW SAFE TO HAVE CONDITIONAL RETURNS AFTER ALL HOOKS
 
-    // Show loading spinner while checking auth
-    if (!isLoaded) {
+    // Show loading spinner while checking auth or loading data
+    if (!isLoaded || isLoadingData) {
         return (
             <main className="min-h-screen flex flex-col items-center justify-center bg-green-50/80">
-                <Spinner size="large" />
+                <Spinner />
+                <p className="mt-4 text-sm text-muted-foreground">
+                    {!isLoaded ? 'Loading...' : 'Loading your financial data...'}
+                </p>
             </main>
         );
     }
@@ -224,6 +356,22 @@ export default function ChatWithFinAI() {
     // Don't render anything if user is not signed in (will redirect)
     if (!isSignedIn) {
         return null;
+    }
+
+    // Show error if financial data couldn't be loaded
+    if (!financialData) {
+        return (
+            <main className="min-h-screen flex flex-col items-center justify-center bg-green-50/80">
+                <div className="text-red-500 text-center space-y-4">
+                    <p className="text-lg font-semibold">Unable to load financial data</p>
+                    <p className="text-sm">Please try refreshing the page or go back to dashboard.</p>
+                    <Button onClick={handleBack} variant="outline">
+                        <ChevronLeft className="mr-2 h-4 w-4" />
+                        Back to Dashboard
+                    </Button>
+                </div>
+            </main>
+        );
     }
 
     return (
@@ -385,7 +533,7 @@ export default function ChatWithFinAI() {
                                             : 'Listening...'
                                         : callState === "ended"
                                             ? "Call ended"
-                                            : isReady
+                                            : isReady && financialData
                                                 ? "Ready to chat with FinAI"
                                                 : "Initializing..."}
                             </motion.span>
@@ -401,9 +549,9 @@ export default function ChatWithFinAI() {
                                 className={`${!canStart ? "bg-gray-400 cursor-not-allowed" : ""}`}
                                 aria-disabled={!canStart}
                                 aria-label="Start chat with FinAI"
-                                title={!isReady ? "Initializing voice SDK..." : undefined}
+                                title={!isReady || !financialData ? "Loading financial data..." : undefined}
                             >
-                                {isReady ? "Start call" : "Initializing..."}
+                                {isReady && financialData ? "Start call" : "Loading data..."}
                             </Button>
                         ) : callState === "connecting" ? (
                             <Button
