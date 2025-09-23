@@ -209,10 +209,10 @@ export default function ChatWithFinAI() {
                 }
             });
 
-            v.on("error", (e// eslint-disable-next-line @typescript-eslint/no-explicit-any
-any) => {
+            v.on("error", (e: unknown) => {
                 console.error("❌ Vapi error:", e);
-                setError(typeof e === "string" ? e : e?.message ?? "Unknown error");
+                const message = typeof e === "string" ? e : e instanceof Error ? e.message : "Unknown error";
+                setError(message);
                 setCallState("ended");
                 setMode("listening");
             });
@@ -232,16 +232,15 @@ any) => {
                 speechEndTimeoutRef.current = null;
             });
 
-            v.on("message", (message// eslint-disable-next-line @typescript-eslint/no-explicit-any
-any) => {
+            v.on("message", (message: unknown) => {
                 console.log("💬 Message:", message);
             });
 
             initializedRef.current = true;
             setIsReady(true);
-        } catch (e// eslint-disable-next-line @typescript-eslint/no-explicit-any
-any) {
-            setError(e?.message ?? "Failed to initialize Vapi");
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : "Failed to initialize Vapi";
+            setError(message);
             setIsReady(false);
         }
 
@@ -313,10 +312,10 @@ any) {
                     financeData: vapiVariables
                 }
             });
-        } catch (e// eslint-disable-next-line @typescript-eslint/no-explicit-any
-any) {
+        } catch (e: unknown) {
             console.error("❌ Failed to start call:", e);
-            setError(e?.message ?? "Failed to start call");
+            const message = e instanceof Error ? e.message : "Failed to start call";
+            setError(message);
             setCallState("ended");
         }
     }, [isClient, isInCall, financialData]);
@@ -328,9 +327,9 @@ any) {
         try {
             console.log("⏹️ Ending call");
             await v.stop();
-        } catch (e// eslint-disable-next-line @typescript-eslint/no-explicit-any
-any) {
-            setError(e?.message ?? "Failed to end call");
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : "Failed to end call";
+            setError(message);
         }
     }, []);
 

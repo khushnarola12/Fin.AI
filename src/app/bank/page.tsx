@@ -182,7 +182,7 @@ export default function UploadCSV() {
                       <strong>Description:</strong> Transaction description
                     </li>
                     <li>
-                      <strong>Transaction Type:</strong> "debit" or "credit"
+                      <strong>Transaction Type:</strong> &quot;debit&quot; or &quot;credit&quot;
                     </li>
                     <li>
                       <strong>Transaction Amount:</strong> Numerical amount
