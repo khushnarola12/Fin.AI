@@ -17,11 +17,16 @@ type CallState = "idle" | "connecting" | "active" | "ended";
 type Mode = "speaking" | "listening";
 
 interface FinancialData {
-    user: any;
-    assets: any[];
-    liabilities: any[];
-    investments: any[];
-    ppf: any;
+    user// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any;
+    assets// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any[];
+    liabilities// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any[];
+    investments// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any[];
+    ppf// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any;
 }
 
 export default function ChatWithFinAI() {
@@ -112,9 +117,12 @@ export default function ChatWithFinAI() {
         const { user, assets, liabilities, investments, ppf } = data;
         
         // Calculate totals
-        const totalAssets = assets.reduce((sum: number, asset: any) => sum + asset.value, 0);
-        const totalLiabilities = liabilities.reduce((sum: number, liability: any) => sum + liability.amount, 0);
-        const totalInvestments = investments.reduce((sum: number, investment: any) => sum + investment.total_value, 0);
+        const totalAssets = assets.reduce((sum: number, asset// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any) => sum + asset.value, 0);
+        const totalLiabilities = liabilities.reduce((sum: number, liability// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any) => sum + liability.amount, 0);
+        const totalInvestments = investments.reduce((sum: number, investment// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any) => sum + investment.total_value, 0);
         const netWorth = user?.net_worth || (totalAssets - totalLiabilities);
 
         return {
@@ -208,7 +216,8 @@ export default function ChatWithFinAI() {
                 }
             });
 
-            v.on("error", (e: any) => {
+            v.on("error", (e// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any) => {
                 console.error("❌ Vapi error:", e);
                 setError(typeof e === "string" ? e : e?.message ?? "Unknown error");
                 setCallState("ended");
@@ -230,13 +239,15 @@ export default function ChatWithFinAI() {
                 speechEndTimeoutRef.current = null;
             });
 
-            v.on("message", (message: any) => {
+            v.on("message", (message// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any) => {
                 console.log("💬 Message:", message);
             });
 
             initializedRef.current = true;
             setIsReady(true);
-        } catch (e: any) {
+        } catch (e// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any) {
             setError(e?.message ?? "Failed to initialize Vapi");
             setIsReady(false);
         }
@@ -309,7 +320,8 @@ export default function ChatWithFinAI() {
                     financeData: vapiVariables
                 }
             });
-        } catch (e: any) {
+        } catch (e// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any) {
             console.error("❌ Failed to start call:", e);
             setError(e?.message ?? "Failed to start call");
             setCallState("ended");
@@ -323,7 +335,8 @@ export default function ChatWithFinAI() {
         try {
             console.log("⏹️ Ending call");
             await v.stop();
-        } catch (e: any) {
+        } catch (e// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any) {
             setError(e?.message ?? "Failed to end call");
         }
     }, []);

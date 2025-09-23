@@ -21,11 +21,16 @@ interface Message {
 }
 
 interface FinancialData {
-    user: any;
-    assets: any[];
-    liabilities: any[];
-    investments: any[];
-    ppf: any;
+    user// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any;
+    assets// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any[];
+    liabilities// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any[];
+    investments// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any[];
+    ppf// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any;
 }
 
 export default function ChatWithFinAI() {

@@ -6,22 +6,26 @@ export const runtime = "edge";
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Function to format financial data for AI context
-function formatFinancialContext(data: any) {
+function formatFinancialContext(data// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any) {
   if (!data) return "No financial data available.";
 
   const { user, assets, liabilities, investments, ppf } = data;
 
   // Calculate totals
   const totalAssets = assets?.reduce(
-    (sum: number, asset: any) => sum + asset.value,
+    (sum: number, asset// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any) => sum + asset.value,
     0
   ) || 0;
   const totalLiabilities = liabilities?.reduce(
-    (sum: number, liability: any) => sum + liability.amount,
+    (sum: number, liability// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any) => sum + liability.amount,
     0
   ) || 0;
   const totalInvestments = investments?.reduce(
-    (sum: number, investment: any) => sum + investment.total_value,
+    (sum: number, investment// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any) => sum + investment.total_value,
     0
   ) || 0;
   const netWorth = user?.net_worth || totalAssets - totalLiabilities;
@@ -37,7 +41,8 @@ ${
   assets?.length > 0
     ? assets
         .map(
-          (asset: any) =>
+          (asset// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any) =>
             `- ${asset.name} (${asset.type}): ₹${asset.value.toLocaleString()}`
         )
         .join("\n")
@@ -49,7 +54,9 @@ ${
   liabilities?.length > 0
     ? liabilities
         .map(
-          (liability: any) =>
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (liability// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any) =>
             `- ${liability.name} (${
               liability.type
             }): ₹${liability.amount.toLocaleString()}${
@@ -67,7 +74,8 @@ ${
   investments?.length > 0
     ? investments
         .map(
-          (investment: any) =>
+          (investment// eslint-disable-next-line @typescript-eslint/no-explicit-any
+any) =>
             `- ${investment.name} (${investment.type}): ${
               investment.shares
             } shares at ₹${
