@@ -517,7 +517,7 @@ export default function HomePage() {
                       {testimonial.savings}
                     </Badge>
                   </div>
-                  <p className="text-gray-600 mb-4 italic text-sm leading-relaxed">"{testimonial.content}"</p>
+                  <p className="text-gray-600 mb-4 italic text-sm leading-relaxed">&quot;{testimonial.content}&quot;</p>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
                       <span className="text-green-600 font-semibold text-sm">
@@ -555,7 +555,7 @@ export default function HomePage() {
               </AccordionTrigger>
               <AccordionContent className="text-gray-600 text-sm leading-relaxed pt-2">
                 We use bank-level 256-bit encryption and are SOC 2 Type II certified. Your data is never stored
-                permanently and all connections use read-only access. We're also SEC compliant and regularly audited by
+                permanently and all connections use read-only access. We are also SEC compliant and regularly audited by
                 third-party security firms.
               </AccordionContent>
             </AccordionItem>
@@ -566,7 +566,7 @@ export default function HomePage() {
               </AccordionTrigger>
               <AccordionContent className="text-gray-600 text-sm leading-relaxed pt-2">
                 Our AI can help with investment planning, retirement strategies, mortgage advice, debt consolidation,
-                tax optimization, insurance planning, budgeting, and more. It's trained on comprehensive financial data
+                tax optimization, insurance planning, budgeting, and more. It is trained on comprehensive financial data
                 and regulations.
               </AccordionContent>
             </AccordionItem>
@@ -597,7 +597,7 @@ export default function HomePage() {
                 Do you support international users?
               </AccordionTrigger>
               <AccordionContent className="text-gray-600 text-sm leading-relaxed pt-2">
-                Currently, we support users in the US, Canada, UK, and Australia. We're working on expanding to more
+                Currently, we support users in the US, Canada, UK, and Australia. We are working on expanding to more
                 countries. Our AI can handle multiple currencies and international investment products.
               </AccordionContent>
             </AccordionItem>
@@ -608,7 +608,7 @@ export default function HomePage() {
               </AccordionTrigger>
               <AccordionContent className="text-gray-600 text-sm leading-relaxed pt-2">
                 You can call our dedicated number anytime to speak with our AI. The conversation is transcribed in
-                real-time, and you'll receive a summary via email. Voice calls are included in Professional and
+                real-time, and ll receive a summary via email. Voice calls are included in Professional and
                 Enterprise plans.
               </AccordionContent>
             </AccordionItem>
