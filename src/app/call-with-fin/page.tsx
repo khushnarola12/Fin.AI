@@ -6,6 +6,13 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
 import Vapi from "@vapi-ai/web";
+import type {
+    FinancialData,
+    AssetRecord,
+    LiabilityRecord,
+    InvestmentRecord,
+    PpfRecord,
+} from "@/lib/types";
 import { Spinner } from "@/components/spinner";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
@@ -16,18 +23,7 @@ const ASSISTANT_ID = process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID!;
 type CallState = "idle" | "connecting" | "active" | "ended";
 type Mode = "speaking" | "listening";
 
-interface FinancialData {
-    user// eslint-disable-next-line @typescript-eslint/no-explicit-any
-any;
-    assets// eslint-disable-next-line @typescript-eslint/no-explicit-any
-any[];
-    liabilities// eslint-disable-next-line @typescript-eslint/no-explicit-any
-any[];
-    investments// eslint-disable-next-line @typescript-eslint/no-explicit-any
-any[];
-    ppf// eslint-disable-next-line @typescript-eslint/no-explicit-any
-any;
-}
+// FinancialData is imported from shared types
 
 export default function ChatWithFinAI() {
     const router = useRouter();
@@ -117,12 +113,9 @@ export default function ChatWithFinAI() {
         const { user, assets, liabilities, investments, ppf } = data;
         
         // Calculate totals
-        const totalAssets = assets.reduce((sum: number, asset// eslint-disable-next-line @typescript-eslint/no-explicit-any
-any) => sum + asset.value, 0);
-        const totalLiabilities = liabilities.reduce((sum: number, liability// eslint-disable-next-line @typescript-eslint/no-explicit-any
-any) => sum + liability.amount, 0);
-        const totalInvestments = investments.reduce((sum: number, investment// eslint-disable-next-line @typescript-eslint/no-explicit-any
-any) => sum + investment.total_value, 0);
+        const totalAssets = assets.reduce((sum: number, asset: AssetRecord) => sum + (asset.value ?? 0), 0);
+        const totalLiabilities = liabilities.reduce((sum: number, liability: LiabilityRecord) => sum + (liability.amount ?? 0), 0);
+        const totalInvestments = investments.reduce((sum: number, investment: InvestmentRecord) => sum + (investment.total_value ?? 0), 0);
         const netWorth = user?.net_worth || (totalAssets - totalLiabilities);
 
         return {
@@ -140,16 +133,16 @@ any) => sum + investment.total_value, 0);
             
             // Asset details
             assetsCount: assets.length.toString(),
-            topAsset: assets.length > 0 ? assets.reduce((max, asset) => asset.value > max.value ? asset : max).name : "None",
+            topAsset: assets.length > 0 ? assets.reduce((max, asset) => (asset.value ?? 0) > (max.value ?? 0) ? asset : max).name : "None",
             
             // Liability details
             liabilitiesCount: liabilities.length.toString(),
-            highestDebt: liabilities.length > 0 ? liabilities.reduce((max, liability) => liability.amount > max.amount ? liability : max).name : "None",
+            highestDebt: liabilities.length > 0 ? liabilities.reduce((max, liability) => (liability.amount ?? 0) > (max.amount ?? 0) ? liability : max).name : "None",
             
             // Investment details
             investmentsCount: investments.length.toString(),
-            bestPerformer: investments.length > 0 ? investments.reduce((max, inv) => inv.gain_loss_percentage > max.gain_loss_percentage ? inv : max).name : "None",
-            portfolioGain: investments.length > 0 ? investments.reduce((sum, inv) => sum + inv.gain_loss, 0).toFixed(0) : "0",
+            bestPerformer: investments.length > 0 ? investments.reduce((max, inv) => (inv.gain_loss_percentage ?? 0) > (max.gain_loss_percentage ?? 0) ? inv : max).name : "None",
+            portfolioGain: investments.length > 0 ? investments.reduce((sum, inv) => sum + (inv.gain_loss ?? 0), 0).toFixed(0) : "0",
             
             // PPF details
             ppfContribution: ppf?.annual_contribution?.toLocaleString() || "0",

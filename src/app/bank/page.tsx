@@ -9,8 +9,10 @@ import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Upload, FileText, AlertCircle, CheckCircle2, X } from "lucide-react"
 
+import type { ChartsData } from "@/lib/types"
+
 export default function UploadCSV() {
-  const [stats, setStats] = useState<any>(null)
+  const [stats, setStats] = useState<ChartsData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [uploadProgress, setUploadProgress] = useState(0)

@@ -8,6 +8,7 @@ import { Inter } from 'next/font/google';
 import ChatInput from '@/components/chat-input';
 import MessagesContainer from '@/components/message-container';
 import { supabase } from '@/lib/supabase';
+import type { FinancialData } from "@/lib/types";
 
 const inter = Inter({
     subsets: ["latin"],
@@ -20,18 +21,7 @@ interface Message {
     timestamp: Date;
 }
 
-interface FinancialData {
-    user// eslint-disable-next-line @typescript-eslint/no-explicit-any
-any;
-    assets// eslint-disable-next-line @typescript-eslint/no-explicit-any
-any[];
-    liabilities// eslint-disable-next-line @typescript-eslint/no-explicit-any
-any[];
-    investments// eslint-disable-next-line @typescript-eslint/no-explicit-any
-any[];
-    ppf// eslint-disable-next-line @typescript-eslint/no-explicit-any
-any;
-}
+// FinancialData is imported from shared types
 
 export default function ChatWithFinAI() {
     const router = useRouter();

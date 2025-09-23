@@ -189,8 +189,7 @@ export default function MessageBubble({ message, index }: MessageBubbleProps) {
                                     td: ({ node, ...props }) => (
                                         <td className="border border-gray-400 px-3 py-2" {...props} />
                                     ),
-                                    code: ({ node, inline, ...props }// eslint-disable-next-line @typescript-eslint/no-explicit-any
-any) =>
+                                    code: ({ node, inline, ...props }) =>
                                         inline ? (
                                             <code className="bg-gray-200 px-1 py-0.5 rounded text-xs font-mono" {...props} />
                                         ) : (
