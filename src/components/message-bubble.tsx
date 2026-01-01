@@ -139,64 +139,59 @@ export default function MessageBubble({ message, index }: MessageBubbleProps) {
                             <ReactMarkdown
                                 remarkPlugins={[remarkGfm]}
                                 components={{
-                                    h1: ({ node, ...props }) => (
+                                    h1: ({ node: _node, ...props }) => (
                                         <h1 className="text-lg font-bold mb-2 mt-0" {...props} />
                                     ),
-                                    h2: ({ node, ...props }) => (
+                                    h2: ({ node: _node, ...props }) => (
                                         <h2 className="text-base font-semibold mb-2 mt-2" {...props} />
                                     ),
-                                    h3: ({ node, ...props }) => (
+                                    h3: ({ node: _node, ...props }) => (
                                         <h3 className="text-sm font-medium mb-1 mt-2" {...props} />
                                     ),
-                                    p: ({ node, ...props }) => (
+                                    p: ({ node: _node, ...props }) => (
                                         <p className="text-sm leading-relaxed mb-2 mt-0 last:mb-1" {...props} />
                                     ),
-                                    strong: ({ node, ...props }) => (
+                                    strong: ({ node: _node, ...props }) => (
                                         <strong className="font-semibold" {...props} />
                                     ),
-                                    em: ({ node, ...props }) => (
+                                    em: ({ node: _node, ...props }) => (
                                         <em className="italic" {...props} />
                                     ),
-                                    ul: ({ node, ...props }) => (
+                                    ul: ({ node: _node, ...props }) => (
                                         <ul className="text-sm leading-relaxed mb-2 mt-1 ml-4" style={{ listStyleType: 'disc' }} {...props} />
                                     ),
-                                    ol: ({ node, ...props }) => (
+                                    ol: ({ node: _node, ...props }) => (
                                         <ol className="text-sm leading-relaxed mb-2 mt-1 ml-4" style={{ listStyleType: 'decimal' }} {...props} />
                                     ),
-                                    li: ({ node, ...props }) => (
+                                    li: ({ node: _node, ...props }) => (
                                         <li className="text-sm leading-relaxed mb-0" style={{ display: 'list-item' }} {...props} />
                                     ),
-                                    blockquote: ({ node, ...props }) => (
+                                    blockquote: ({ node: _node, ...props }) => (
                                         <blockquote className="border-l-4 border-gray-300 pl-3 italic mb-2 mt-1" {...props} />
                                     ),
-                                    table: ({ node, ...props }) => (
+                                    table: ({ node: _node, ...props }) => (
                                         <div className="overflow-x-auto mb-4">
                                             <table className="min-w-full border-collapse border border-gray-800 text-sm rounded-xl overflow-hidden bg-green-50" {...props} />
                                         </div>
                                     ),
-                                    thead: ({ node, ...props }) => (
+                                    thead: ({ node: _node, ...props }) => (
                                         <thead className="bg-green-100" {...props} />
                                     ),
-                                    tbody: ({ node, ...props }) => (
+                                    tbody: ({ node: _node, ...props }) => (
                                         <tbody {...props} />
                                     ),
-                                    tr: ({ node, ...props }) => (
+                                    tr: ({ node: _node, ...props }) => (
                                         <tr className="border-b border-gray-400" {...props} />
                                     ),
-                                    th: ({ node, ...props }) => (
+                                    th: ({ node: _node, ...props }) => (
                                         <th className="border border-gray-400 px-3 py-2 text-left font-semibold bg-green-50" {...props} />
                                     ),
-                                    td: ({ node, ...props }) => (
+                                    td: ({ node: _node, ...props }) => (
                                         <td className="border border-gray-400 px-3 py-2" {...props} />
                                     ),
-                                    code: (props: any) =>
-                                        props.inline ? (
-                                            <code className="bg-gray-200 px-1 py-0.5 rounded text-xs font-mono" {...props} />
-                                        ) : (
-                                            <pre className="bg-gray-200 p-2 rounded text-xs font-mono mb-2 mt-1 overflow-x-auto">
-                                                <code {...props} />
-                                            </pre>
-                                        )
+                                    code: (props: any) => (
+                                        <code className="bg-gray-200 px-1 py-0.5 rounded text-xs font-mono" {...props} />
+                                    )
                                 }}
                             >
                                 {cleanMarkdown(message.content)}
