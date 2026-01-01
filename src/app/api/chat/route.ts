@@ -1,39 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import type {
-  AssetRecord,
-  FinancialData,
-  InvestmentRecord,
-  LiabilityRecord,
-} from "@/lib/types";
 
 export const runtime = "edge";
 
-const geminiApiKey = process.env.GEMINI_API_KEY;
-if (!geminiApiKey) {
-  throw new Error("GEMINI_API_KEY is not set in environment variables");
-}
-const genAI = new GoogleGenerativeAI(geminiApiKey);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Function to format financial data for AI context
-function formatFinancialContext(data: FinancialData | null) {
+function formatFinancialContext(data: any) {
   if (!data) return "No financial data available.";
 
   const { user, assets, liabilities, investments, ppf } = data;
 
   // Calculate totals
-  const totalAssets =
-    assets?.reduce((sum: number, asset: AssetRecord) => sum + (asset.value ?? 0), 0) || 0;
-  const totalLiabilities =
-    liabilities?.reduce(
-      (sum: number, liability: LiabilityRecord) => sum + (liability.amount ?? 0),
-      0
-    ) || 0;
-  const totalInvestments =
-    investments?.reduce(
-      (sum: number, investment: InvestmentRecord) => sum + (investment.total_value ?? 0),
-      0
-    ) || 0;
+  const totalAssets = assets?.reduce(
+    (sum: number, asset: any) => sum + asset.value,
+    0
+  ) || 0;
+  const totalLiabilities = liabilities?.reduce(
+    (sum: number, liability: any) => sum + liability.amount,
+    0
+  ) || 0;
+  const totalInvestments = investments?.reduce(
+    (sum: number, investment: any) => sum + investment.total_value,
+    0
+  ) || 0;
   const netWorth = user?.net_worth || totalAssets - totalLiabilities;
 
   return `
@@ -46,7 +36,10 @@ ASSETS (Total: ₹${totalAssets.toLocaleString()}):
 ${
   assets?.length > 0
     ? assets
-        .map((asset: AssetRecord) => `- ${asset.name} (${asset.type}): ₹${(asset.value ?? 0).toLocaleString()}`)
+        .map(
+          (asset: any) =>
+            `- ${asset.name} (${asset.type}): ₹${asset.value.toLocaleString()}`
+        )
         .join("\n")
     : "- No assets recorded"
 }
@@ -55,10 +48,16 @@ LIABILITIES (Total: ₹${totalLiabilities.toLocaleString()}):
 ${
   liabilities?.length > 0
     ? liabilities
-        .map((liability: LiabilityRecord) =>
-          `- ${liability.name} (${liability.type}): ₹${(liability.amount ?? 0).toLocaleString()}${
-            liability.interest_rate ? ` at ${liability.interest_rate}% interest` : ""
-          }`
+        .map(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (liability: any) =>
+            `- ${liability.name} (${
+              liability.type
+            }): ₹${liability.amount.toLocaleString()}${
+              liability.interest_rate
+                ? ` at ${liability.interest_rate}% interest`
+                : ""
+            }`
         )
         .join("\n")
     : "- No liabilities recorded"
@@ -68,12 +67,16 @@ INVESTMENTS (Total: ₹${totalInvestments.toLocaleString()}):
 ${
   investments?.length > 0
     ? investments
-        .map((investment: InvestmentRecord) =>
-          `- ${investment.name} (${investment.type}): ${investment.shares ?? 0} shares at ₹${
-            investment.current_price ?? 0
-          } each, Total: ₹${(investment.total_value ?? 0).toFixed(2)} (${(investment.gain_loss ?? 0) >= 0 ? "+" : ""}${(
-            investment.gain_loss_percentage ?? 0
-          ).toFixed(2)}%)`
+        .map(
+           // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (investment: any) =>
+            `- ${investment.name} (${investment.type}): ${
+              investment.shares
+            } shares at ₹${
+              investment.current_price
+            } each, Total: ₹${investment.total_value.toFixed(2)} (${
+              investment.gain_loss >= 0 ? "+" : ""
+            }${investment.gain_loss_percentage.toFixed(2)}%)`
         )
         .join("\n")
     : "- No investments recorded"
@@ -124,6 +127,24 @@ I will keep our conversations focused strictly on your financial well-being. All
         maxOutputTokens: 500,
         temperature: 0.7,
       },
+      safetySettings: [
+        {
+          category: "HARM_CATEGORY_HARASSMENT",
+          threshold: "BLOCK_NONE",
+        },
+        {
+          category: "HARM_CATEGORY_HATE_SPEECH", 
+          threshold: "BLOCK_NONE",
+        },
+        {
+          category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+          threshold: "BLOCK_NONE",
+        },
+        {
+          category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+          threshold: "BLOCK_NONE",
+        },
+      ],
     });
 
     // Combine system prompt and user message
@@ -180,10 +201,10 @@ I will keep our conversations focused strictly on your financial well-being. All
           controller.close();
         } catch (error) {
           console.error("Streaming error:", error);
-          const message = error instanceof Error ? error.message : String(error);
+          
           // Send error response
           const errorData = `data: ${JSON.stringify({ 
-            error: "Stream processing failed: " + message 
+            error: "Stream processing failed: " + error.message 
           })}\n\n`;
           controller.enqueue(encoder.encode(errorData));
           controller.close();
@@ -200,9 +221,8 @@ I will keep our conversations focused strictly on your financial well-being. All
     });
   } catch (error) {
     console.error("Error in chat API:", error);
-    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { error: "Failed to generate response: " + message },
+      { error: "Failed to generate response: " + error.message },
       { status: 500 }
     );
   }

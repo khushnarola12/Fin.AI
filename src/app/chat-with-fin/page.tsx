@@ -8,7 +8,6 @@ import { Inter } from 'next/font/google';
 import ChatInput from '@/components/chat-input';
 import MessagesContainer from '@/components/message-container';
 import { supabase } from '@/lib/supabase';
-import type { FinancialData } from "@/lib/types";
 
 const inter = Inter({
     subsets: ["latin"],
@@ -21,7 +20,13 @@ interface Message {
     timestamp: Date;
 }
 
-// FinancialData is imported from shared types
+interface FinancialData {
+    user: any;
+    assets: any[];
+    liabilities: any[];
+    investments: any[];
+    ppf: any;
+}
 
 export default function ChatWithFinAI() {
     const router = useRouter();
