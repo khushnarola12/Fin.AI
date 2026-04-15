@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
 
 export const runtime = "edge";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 // Function to format financial data for AI context
 function formatFinancialContext(data: any) {
@@ -129,20 +129,20 @@ I will keep our conversations focused strictly on your financial well-being. All
       },
       safetySettings: [
         {
-          category: "HARM_CATEGORY_HARASSMENT",
-          threshold: "BLOCK_NONE",
+          category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+          threshold: HarmBlockThreshold.BLOCK_NONE,
         },
         {
-          category: "HARM_CATEGORY_HATE_SPEECH", 
-          threshold: "BLOCK_NONE",
+          category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+          threshold: HarmBlockThreshold.BLOCK_NONE,
         },
         {
-          category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-          threshold: "BLOCK_NONE",
+          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+          threshold: HarmBlockThreshold.BLOCK_NONE,
         },
         {
-          category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-          threshold: "BLOCK_NONE",
+          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+          threshold: HarmBlockThreshold.BLOCK_NONE,
         },
       ],
     });
@@ -201,10 +201,11 @@ I will keep our conversations focused strictly on your financial well-being. All
           controller.close();
         } catch (error) {
           console.error("Streaming error:", error);
-          
+
           // Send error response
-          const errorData = `data: ${JSON.stringify({ 
-            error: "Stream processing failed: " + error.message 
+          const message = error instanceof Error ? error.message : "Unknown error";
+          const errorData = `data: ${JSON.stringify({
+            error: "Stream processing failed: " + message
           })}\n\n`;
           controller.enqueue(encoder.encode(errorData));
           controller.close();
@@ -221,8 +222,9 @@ I will keep our conversations focused strictly on your financial well-being. All
     });
   } catch (error) {
     console.error("Error in chat API:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: "Failed to generate response: " + error.message },
+      { error: "Failed to generate response: " + message },
       { status: 500 }
     );
   }
